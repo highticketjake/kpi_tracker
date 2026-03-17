@@ -1,5 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
-import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
+import {
+  GoogleAuthProvider,
+  getRedirectResult,
+  onAuthStateChanged,
+  signInWithPopup,
+  signInWithRedirect,
+  signOut,
+} from "firebase/auth";
 import { doc, getDoc, onSnapshot, setDoc } from "firebase/firestore";
 import { auth, db } from "./firebase.js";
 import {
@@ -74,6 +81,19 @@ function daysAgo(n) {
 }
 function monthStart() {
   return TODAY.slice(0, 8) + "01";
+}
+
+function authErrorMessage(e) {
+  var code = e && e.code ? String(e.code) : "";
+  if (code === "auth/unauthorized-domain") {
+    return "This domain isn't authorized in Firebase Auth. Add it under Authentication → Settings → Authorized domains.";
+  }
+  if (code === "auth/popup-blocked") return "Popup was blocked by the browser. Trying redirect sign-in…";
+  if (code === "auth/popup-closed-by-user") return "Popup was closed before completing sign-in.";
+  if (code === "auth/cancelled-popup-request") return "Another sign-in popup is already open.";
+  if (code === "auth/operation-not-supported-in-this-environment") return "Popup sign-in not supported here. Trying redirect sign-in…";
+  if (code) return code;
+  return "Sign-in failed. Check your Firebase config and authorized domains.";
 }
 
 async function load() {
@@ -631,6 +651,13 @@ export default function App() {
     return unsub;
   }, []);
 
+  useEffect(function () {
+    // Complete redirect sign-in flows (Safari / blocked popups fallback).
+    getRedirectResult(auth).catch(function (e) {
+      flash(authErrorMessage(e));
+    });
+  }, []);
+
   useEffect(
     function () {
       if (!authReady || !user) return;
@@ -662,7 +689,16 @@ export default function App() {
   }, []);
   function doSignIn() {
     var provider = new GoogleAuthProvider();
-    return signInWithPopup(auth, provider);
+    provider.setCustomParameters({ prompt: "select_account" });
+    return signInWithPopup(auth, provider).catch(function (e) {
+      var code = e && e.code ? String(e.code) : "";
+      var shouldRedirect =
+        code === "auth/popup-blocked" ||
+        code === "auth/operation-not-supported-in-this-environment";
+      flash(authErrorMessage(e));
+      if (shouldRedirect) return signInWithRedirect(auth, provider);
+      throw e;
+    });
   }
   function doSignOut() {
     return signOut(auth);
@@ -828,6 +864,9 @@ export default function App() {
               Sign in with Google
             </Btn>
           </div>
+          {toast ? (
+            <div style={{ marginTop: 14, textAlign: "center", color: "#8E8E93", fontWeight: 600, fontSize: 12 }}>{toast}</div>
+          ) : null}
         </div>
       </div>
     );
