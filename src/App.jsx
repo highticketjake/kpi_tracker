@@ -1350,35 +1350,64 @@ export default function App() {
   var accessNotifRef = useRef(null);
   var officePickerRef = useRef(null);
   var claimStartedRef = useRef(false);
-  var swipeTabTouchRef = useRef({ x: 0, y: 0, ignore: false });
+  var swipeTabTouchRef = useRef({ x: 0, y: 0, ignore: false, axisLock: null, tracking: false });
 
   var onSwipeTabTouchStart = useCallback(function (e) {
-    if (typeof window !== "undefined" && !window.matchMedia("(max-width: 768px)").matches) return;
     var el = e.target;
     if (el && el.closest && (el.closest("input, textarea, select") || el.closest("[data-no-swipe-tab]"))) {
       swipeTabTouchRef.current.ignore = true;
+      swipeTabTouchRef.current.tracking = false;
       return;
     }
     swipeTabTouchRef.current.ignore = false;
+    swipeTabTouchRef.current.axisLock = null;
     if (!e.touches || e.touches.length === 0) return;
     swipeTabTouchRef.current.x = e.touches[0].clientX;
     swipeTabTouchRef.current.y = e.touches[0].clientY;
+    swipeTabTouchRef.current.tracking = true;
+  }, []);
+
+  var onSwipeTabTouchMove = useCallback(function (e) {
+    if (!swipeTabTouchRef.current.tracking) return;
+    if (swipeTabTouchRef.current.ignore) return;
+    if (swipeTabTouchRef.current.axisLock) return;
+    if (!e.touches || e.touches.length === 0) return;
+    var x = e.touches[0].clientX;
+    var y = e.touches[0].clientY;
+    var dx = x - swipeTabTouchRef.current.x;
+    var dy = y - swipeTabTouchRef.current.y;
+    if (Math.abs(dx) < 12 && Math.abs(dy) < 12) return;
+    if (Math.abs(dx) > Math.abs(dy)) swipeTabTouchRef.current.axisLock = "h";
+    else swipeTabTouchRef.current.axisLock = "v";
   }, []);
 
   var onSwipeTabTouchEnd = useCallback(
     function (e) {
+      if (!swipeTabTouchRef.current.tracking) return;
+      swipeTabTouchRef.current.tracking = false;
       if (swipeTabTouchRef.current.ignore) {
         swipeTabTouchRef.current.ignore = false;
+        swipeTabTouchRef.current.axisLock = null;
         return;
       }
-      if (typeof window !== "undefined" && !window.matchMedia("(max-width: 768px)").matches) return;
       var start = swipeTabTouchRef.current;
-      if (!e.changedTouches || e.changedTouches.length === 0) return;
+      if (!e.changedTouches || e.changedTouches.length === 0) {
+        swipeTabTouchRef.current.axisLock = null;
+        return;
+      }
       var endX = e.changedTouches[0].clientX;
       var endY = e.changedTouches[0].clientY;
       var dx = endX - start.x;
       var dy = endY - start.y;
-      if (Math.abs(dx) < 64 || Math.abs(dx) < Math.abs(dy) * 1.35) return;
+      var al = swipeTabTouchRef.current.axisLock;
+      swipeTabTouchRef.current.axisLock = null;
+      if (al === "v") return;
+      var minPx = 44;
+      if (al === "h") {
+        if (Math.abs(dx) < minPx) return;
+      } else {
+        if (Math.abs(dx) < minPx || Math.abs(dx) < Math.abs(dy)) return;
+      }
       var keys = MAIN_TABS.map(function (x) {
         return x.k;
       });
@@ -1389,6 +1418,12 @@ export default function App() {
     },
     [tab, setTab]
   );
+
+  var onSwipeTabTouchCancel = useCallback(function () {
+    swipeTabTouchRef.current.tracking = false;
+    swipeTabTouchRef.current.ignore = false;
+    swipeTabTouchRef.current.axisLock = null;
+  }, []);
 
   useEffect(function () {
     var unsub = onAuthStateChanged(auth, function (u) {
@@ -2127,7 +2162,7 @@ export default function App() {
                 onClick={function () {
                   submitAccessRequest();
                 }}
-                style={{ padding: "12px 18px", borderRadius: 12, width: "100%" }}
+                style={{ padding: "12px 18px", borderRadius: 12, width: "100%", background: "#007AFF", color: "#fff" }}
               >
                 Request access
               </Btn>
@@ -2857,7 +2892,7 @@ export default function App() {
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
       <style>
         {
-          ":root,body,*{font-family:'DM Sans',-apple-system,sans-serif}input,select,textarea,button{font-family:inherit}@media (max-width:768px){.header-shell{grid-template-columns:minmax(0,1fr) auto!important}.header-brand-block{display:none!important}}@media print{.weekly-report-print *{box-shadow:none!important}.no-print{display:none!important}.weekly-report-print{padding:16px}}"
+          ":root,body,*{font-family:'DM Sans',-apple-system,sans-serif}input,select,textarea,button{font-family:inherit}@media (max-width:768px){.header-shell{grid-template-columns:minmax(0,1fr) auto!important}.header-brand-block{display:none!important}.header-office-picker{justify-self:start!important}.header-office-picker .office-picker-trigger-btn{justify-content:flex-start!important;text-align:left!important}.header-office-picker .office-picker-menu{left:0!important;transform:none!important;right:auto!important}}@media print{.weekly-report-print *{box-shadow:none!important}.no-print{display:none!important}.weekly-report-print{padding:16px}}"
         }
       </style>
 
@@ -2881,9 +2916,14 @@ export default function App() {
           <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#FF3B30", flexShrink: 0 }} />
           <span style={{ fontWeight: 800, fontSize: 20, color: "#1C1C1E", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Jake's Region</span>
         </div>
-        <div ref={officePickerRef} style={{ position: "relative", justifySelf: "center", maxWidth: "min(420px, calc(100vw - 48px))", minWidth: 0 }}>
+        <div
+          ref={officePickerRef}
+          className="header-office-picker"
+          style={{ position: "relative", justifySelf: "center", maxWidth: "min(420px, calc(100vw - 48px))", minWidth: 0 }}
+        >
           <button
             type="button"
+            className="office-picker-trigger-btn"
             aria-haspopup="listbox"
             aria-expanded={officePickerOpen}
             aria-label={officeScopeTitle + ". Change office or region."}
@@ -2938,6 +2978,7 @@ export default function App() {
           </button>
           {officePickerOpen ? (
             <div
+              className="office-picker-menu"
               role="listbox"
               aria-label="Choose office or region"
               style={{
@@ -3232,8 +3273,11 @@ export default function App() {
                 {showInviteUi ? (
                   <div style={{ borderTop: "1px solid #F2F2F7", paddingTop: 12, marginBottom: 12 }}>
                     <div style={{ fontSize: 10, fontWeight: 700, color: "#8E8E93", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Add user</div>
-                    <div style={{ fontSize: 11, color: "#8E8E93", marginBottom: 8, lineHeight: 1.4 }}>
-                      They show up under Manage users immediately. First Google sign-in with that email attaches their account (no extra step for you). Owners may add other owners; admins can add at admin level or below.
+                    <div style={{ fontSize: 11, color: "#8E8E93", marginBottom: 8, lineHeight: 1.45 }}>
+                      <div style={{ marginBottom: 8 }}>Invitees must sign in with Google using the email you enter.</div>
+                      <div>Default - dashboard access</div>
+                      <div>Admin - dashboard access, can send invites and remove default users</div>
+                      <div>Owner - dashboard access, can send invites, and remove default/admin users</div>
                     </div>
                     <input
                       type="email"
@@ -3469,7 +3513,30 @@ export default function App() {
       ) : null}
 
       <div style={{ maxWidth: 1000, margin: "0 auto", padding: "12px" }}>
-        <div className="no-print" style={{ display: "flex", gap: 4, marginBottom: 14, overflowX: "auto", WebkitOverflowScrolling: "touch", padding: "4px 0" }}>
+        <div
+          className="swipe-tab-root"
+          onTouchStart={onSwipeTabTouchStart}
+          onTouchMove={onSwipeTabTouchMove}
+          onTouchEnd={onSwipeTabTouchEnd}
+          onTouchCancel={onSwipeTabTouchCancel}
+          style={{ minHeight: "calc(100vh - 88px)" }}
+        >
+        <div
+          className="no-print"
+          onTouchStart={function (e) {
+            e.stopPropagation();
+          }}
+          onTouchMove={function (e) {
+            e.stopPropagation();
+          }}
+          onTouchEnd={function (e) {
+            e.stopPropagation();
+          }}
+          onTouchCancel={function (e) {
+            e.stopPropagation();
+          }}
+          style={{ display: "flex", gap: 4, marginBottom: 14, overflowX: "auto", WebkitOverflowScrolling: "touch", padding: "4px 0" }}
+        >
           {MAIN_TABS.map(function (t) {
             return (
               <button
@@ -3502,7 +3569,6 @@ export default function App() {
           </div>
         ) : null}
 
-        <div onTouchStart={onSwipeTabTouchStart} onTouchEnd={onSwipeTabTouchEnd}>
         {tab === "dashboard" &&
           (!selM ? (
             <Card>
