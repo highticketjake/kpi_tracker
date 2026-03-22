@@ -19,6 +19,7 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "./firebase.js";
 import notifPng from "./assets/notif.png";
+import TVView from "./TVView.jsx";
 import {
   LineChart,
   Line,
@@ -50,7 +51,7 @@ var MAIN_TABS = [
   { k: "trends", l: "Trends" },
   { k: "accountability", l: "Log" },
   { k: "rollup", l: "Markets" },
-  { k: "challenge", l: "Challenge" },
+  { k: "challenge", l: "Weekly Challenge" },
   { k: "report", l: "Report" },
   { k: "manage", l: "Manage" },
 ];
@@ -741,6 +742,52 @@ function weekRangeForDate(ymd) {
   var ws = weekStartMonday(ymd);
   return { start: ws, end: addDaysYmd(ws, 6) };
 }
+/** Short label for a Mon–Sun week tab (e.g. Jan 6 – Jan 12). */
+function formatChallengeWeekTabLabel(monYmd, sunYmd) {
+  var o = { month: "short", day: "numeric" };
+  var a = new Date(monYmd + "T12:00:00").toLocaleDateString(undefined, o);
+  var b = new Date(sunYmd + "T12:00:00").toLocaleDateString(undefined, o);
+  return a + " – " + b;
+}
+/** How many past weeks to show as selectable tabs on Weekly Challenge. */
+var CHALLENGE_WEEK_HISTORY = 52;
+/** Monday-based week index (for rotating office-vs-office matchups). */
+function challengeWeekRoundIndex(anchorYmd) {
+  var mon = weekStartMonday(anchorYmd);
+  var epochMonday = "2020-01-06";
+  var ms = new Date(mon + "T12:00:00").getTime() - new Date(epochMonday + "T12:00:00").getTime();
+  return Math.floor(ms / (7 * 86400000));
+}
+/**
+ * Round-robin: each office has one opponent per week; pairings rotate each calendar week.
+ * If there is an odd number of offices, one office has a bye each week (pair with b === null).
+ */
+function officeChallengePairs(mIds, roundIndex) {
+  var ids = mIds.slice();
+  if (ids.length < 2) return [];
+  var n = ids.length;
+  var teams = ids.slice();
+  if (n % 2 === 1) teams.push(null);
+  n = teams.length;
+  var numRounds = n - 1;
+  var r = roundIndex % numRounds;
+  if (r < 0) r += numRounds;
+  var arr = teams.slice();
+  for (var i = 0; i < r; i++) {
+    var last = arr[n - 1];
+    for (var j = n - 1; j > 1; j--) arr[j] = arr[j - 1];
+    arr[1] = last;
+  }
+  var pairs = [];
+  for (var k = 0; k < n / 2; k++) {
+    var t1 = arr[k];
+    var t2 = arr[n - 1 - k];
+    if (t1 !== null && t2 !== null) pairs.push({ a: t1, b: t2 });
+    else if (t1 !== null) pairs.push({ a: t1, b: null });
+    else if (t2 !== null) pairs.push({ a: t2, b: null });
+  }
+  return pairs;
+}
 /** Top knocker by setsSet and top closer by apptsClosed in the ISO week containing anchorDate (Mon–Sun). */
 function weeklyMVP(data, selM, anchorDate) {
   var wr = weekRangeForDate(anchorDate);
@@ -893,8 +940,10 @@ function newHireWeekAvgs(data, rid, rep) {
   var w1 = getDatesInRange(rep.startDate, addDaysYmd(rep.startDate, 6));
   var w2 = getDatesInRange(addDaysYmd(rep.startDate, 7), addDaysYmd(rep.startDate, 13));
   var w3 = getDatesInRange(addDaysYmd(rep.startDate, 14), addDaysYmd(rep.startDate, 20));
+  var w4 = getDatesInRange(addDaysYmd(rep.startDate, 21), addDaysYmd(rep.startDate, 29));
   function avgFor(dr) {
-    if (dr.length === 0) return { doors: 0, convos: 0, sets: 0, closes: 0 };
+    if (dr.length === 0)
+      return { doors: 0, convos: 0, sets: 0, closes: 0, appts: 0 };
     var s = getRangeStats(data, rid, dr);
     var n = dr.length;
     var closeAvg =
@@ -904,9 +953,10 @@ function newHireWeekAvgs(data, rid, rep) {
       convos: n ? Math.round(s.convosHad / n) : 0,
       sets: n ? Math.round((s.setsSet / n) * 10) / 10 : 0,
       closes: closeAvg,
+      appts: n ? Math.round((s.apptsRan / n) * 10) / 10 : 0,
     };
   }
-  return { w1: avgFor(w1), w2: avgFor(w2), w3: avgFor(w3) };
+  return { w1: avgFor(w1), w2: avgFor(w2), w3: avgFor(w3), w4: avgFor(w4) };
 }
 
 /** % of days in lookback where every on-roster rep had an entry (single market). */
@@ -962,6 +1012,87 @@ function Card(p) {
       }}
     >
       {p.children}
+    </div>
+  );
+}
+/** One office-vs-office row: stats for the week; winner by total closes. */
+function ChallengeMatchupBlock(p) {
+  var data = p.data;
+  var pair = p.pair;
+  var challengeDates = p.challengeDates;
+  var isPresentWeek = p.isPresentWeek === true;
+  if (pair.b === null) {
+    var byeName = data.markets[pair.a] ? data.markets[pair.a].name : pair.a;
+    return (
+      <Card>
+        <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 6 }}>🛌 Bye week</div>
+        <p style={{ color: "#8E8E93", margin: 0, fontSize: 14 }}>
+          {isPresentWeek ? byeName + " has no opponent this round." : byeName + " had no opponent that week."}
+        </p>
+      </Card>
+    );
+  }
+  var stA = aggregateMarketChallenge(data, pair.a, challengeDates);
+  var stB = aggregateMarketChallenge(data, pair.b, challengeDates);
+  var win = stA.closes > stB.closes ? pair.a : stB.closes > stA.closes ? pair.b : null;
+  var tie = stA.closes === stB.closes;
+  var cols = [
+    { id: pair.a, s: stA },
+    { id: pair.b, s: stB },
+  ];
+  var bannerText;
+  if (tie) {
+    bannerText = isPresentWeek ? "⚖️ Are tied on closes" : "⚖️ Finished tied on closes";
+  } else {
+    var wname = data.markets[win] ? data.markets[win].name : "";
+    bannerText = isPresentWeek ? "🏆 " + wname + " leads" : "🏆 " + wname + " won";
+  }
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div
+        style={{
+          textAlign: "center",
+          marginBottom: 12,
+          fontWeight: 800,
+          fontSize: 15,
+          color: tie ? "#FF9500" : "#1C1C1E",
+        }}
+      >
+        {bannerText}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        {cols.map(function (col) {
+          var isWin = !tie && win === col.id;
+          return (
+            <Card key={col.id} bc={isWin ? "#34C759" : tie ? "#FFCC00" : undefined}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <span style={{ fontWeight: 800, fontSize: 17, flex: 1 }}>{data.markets[col.id] ? data.markets[col.id].name : ""}</span>
+                {isWin ? <span style={{ fontSize: 20 }}>🏆</span> : tie ? <span style={{ fontSize: 18 }}>⚖️</span> : null}
+              </div>
+              <div style={{ display: "grid", gap: 8, fontSize: 14 }}>
+                <div>
+                  <strong>{col.s.doors}</strong> doors
+                </div>
+                <div>
+                  <strong>{col.s.convos}</strong> convos
+                </div>
+                <div>
+                  <strong>{col.s.sets}</strong> sets
+                </div>
+                <div>
+                  <strong style={{ color: "#34C759" }}>{col.s.closes}</strong> closes
+                </div>
+                <div>
+                  D2C <strong>{col.s.d2c}</strong>%
+                </div>
+                <div>
+                  C2S <strong>{col.s.c2s}</strong>%
+                </div>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1295,6 +1426,9 @@ export default function App() {
   var _cs = useState("closes"),
     clSort = _cs[0],
     setClSort = _cs[1];
+  var _tv = useState(false),
+    tvMode = _tv[0],
+    setTvMode = _tv[1];
   var _ev = useState("cards"),
     enterViewMode = _ev[0],
     setEnterViewMode = _ev[1];
@@ -1304,12 +1438,11 @@ export default function App() {
   var _pr = useState(null),
     profileRepId = _pr[0],
     setProfileRepId = _pr[1];
-  var _chA = useState(null),
-    chMktA = _chA[0],
-    setChMktA = _chA[1];
-  var _chB = useState(null),
-    chMktB = _chB[0],
-    setChMktB = _chB[1];
+  var _cws = useState(function () {
+    return weekStartMonday(TODAY);
+  }),
+    challengeWeekStart = _cws[0],
+    setChallengeWeekStart = _cws[1];
   var _evl = useState(false),
     eventLogOpen = _evl[0],
     setEventLogOpen = _evl[1];
@@ -1514,6 +1647,40 @@ export default function App() {
       return unsub;
     },
     [authReady, user, accessReady, access, selM]
+  );
+
+  useEffect(
+    function () {
+      if (!loaded || !user) return;
+      try {
+        var params = new URLSearchParams(window.location.search);
+        if (params.get("tv") !== "1") return;
+        setTvMode(true);
+        params.delete("tv");
+        var qs = params.toString();
+        var newUrl = window.location.pathname + (qs ? "?" + qs : "") + window.location.hash;
+        window.history.replaceState({}, "", newUrl);
+      } catch (e) {}
+    },
+    [loaded, user]
+  );
+
+  /** TV overlay is fixed; main shell is still tall in the DOM — lock page scroll so the viewport scrollbar disappears. */
+  useEffect(
+    function () {
+      if (!tvMode) return;
+      var html = document.documentElement;
+      var body = document.body;
+      var prevHtmlOverflow = html.style.overflow;
+      var prevBodyOverflow = body.style.overflow;
+      html.style.overflow = "hidden";
+      body.style.overflow = "hidden";
+      return function () {
+        html.style.overflow = prevHtmlOverflow;
+        body.style.overflow = prevBodyOverflow;
+      };
+    },
+    [tvMode]
   );
 
   var persist = useCallback(function (n, eventPayload) {
@@ -2666,19 +2833,201 @@ export default function App() {
   });
 
   var mvpWeek = selM ? weeklyMVP(data, selM, endDate) : null;
-  var chA = chMktA || (mIds[0] || null);
-  var chB = chMktB || (mIds[1] || mIds[0] || null);
-  var challengeDates = getDatesInRange(startDate, endDate);
-  var chAstats = chA ? aggregateMarketChallenge(data, chA, challengeDates) : null;
-  var chBstats = chB ? aggregateMarketChallenge(data, chB, challengeDates) : null;
-  var challengeWinner =
-    chAstats && chBstats && chA !== chB
-      ? chAstats.closes > chBstats.closes
-        ? chA
-        : chBstats.closes > chAstats.closes
-          ? chB
-          : null
+  var challengeWeekBounds = { start: challengeWeekStart, end: addDaysYmd(challengeWeekStart, 6) };
+  var challengeDates = getDatesInRange(challengeWeekBounds.start, challengeWeekBounds.end);
+  var challengeWeekRound = challengeWeekRoundIndex(challengeWeekStart);
+  var challengePairs = officeChallengePairs(mIds, challengeWeekRound);
+  var challengePairForOffice =
+    selM && !isRegion(selM)
+      ? challengePairs.find(function (cp) {
+          return cp.a === selM || cp.b === selM;
+        }) || null
       : null;
+  var challengeThisMonday = weekStartMonday(TODAY);
+  var challengeWeekTabsList = [];
+  for (var _wi = 0; _wi < CHALLENGE_WEEK_HISTORY; _wi++) {
+    var _mon = addDaysYmd(challengeThisMonday, -7 * _wi);
+    var _end = addDaysYmd(_mon, 6);
+    challengeWeekTabsList.push({
+      mon: _mon,
+      end: _end,
+      label: formatChallengeWeekTabLabel(_mon, _end),
+      isThisWeek: _mon === challengeThisMonday,
+    });
+  }
+
+  var tvWeekStart = weekStartMonday(TODAY);
+  var tvWeekEnd = addDaysYmd(tvWeekStart, 6);
+  var tvWeekDates = getDatesInRange(tvWeekStart, tvWeekEnd);
+  var tvWeekDisplayLabel = "This week · " + formatChallengeWeekTabLabel(tvWeekStart, tvWeekEnd);
+  var tvMarketTitle = isRegion(selM) ? "All Offices" : data.markets[selM] ? data.markets[selM].name : "Market";
+  /** TV knockers: this calendar week only; include reps with any week activity (not doors-only gate). */
+  var tvKnockersSorted = [];
+  if (tvMode) {
+    scopedActiveReps(data, selM).forEach(function (p) {
+      var rid = p[0],
+        rep = p[1];
+      var mkt = data.markets[rep.marketId];
+      if (!mkt) return;
+      var s = getRangeStats(data, rid, tvWeekDates);
+      if (s.days === 0) return;
+      if (s.doorsKnocked === 0 && s.setsSet === 0 && s.convosHad === 0) return;
+      tvKnockersSorted.push({
+        rid: rid,
+        name: rep.name,
+        market: mkt.name,
+        role: rep.role || "knocker",
+        doors: s.doorsKnocked,
+        convos: s.convosHad,
+        sets: s.setsSet,
+        d2c: s.d2c,
+        c2s: s.c2s,
+        setsAvg: s.setsAvg,
+        days: s.days,
+        streak: streakCount(data, rid, rep, TODAY),
+      });
+    });
+    tvKnockersSorted.sort(function (a, b) {
+      return b.sets - a.sets;
+    });
+    tvKnockersSorted = tvKnockersSorted.slice(0, 15);
+  }
+  var tvClosersSorted = [];
+  if (tvMode) {
+    scopedActiveReps(data, selM, "closer").forEach(function (p) {
+      var rid = p[0],
+        rep = p[1];
+      var mkt = data.markets[rep.marketId];
+      if (!mkt) return;
+      var s = getRangeStats(data, rid, tvWeekDates);
+      var mSG = getMonthSelfGens(data, rid, endDate);
+      tvClosersSorted.push({
+        rid: rid,
+        name: rep.name,
+        market: mkt.name,
+        closes: s.apptsClosed,
+        apptsRan: s.apptsRan,
+        hours: Math.round(s.hours * 10) / 10,
+        hoursAvg: s.hoursAvg,
+        closeRate: s.closeRate,
+        cadRate: s.cadRate,
+        monthSelfGens: mSG,
+        cads: s.cads,
+        days: s.days,
+        streak: streakCount(data, rid, rep, TODAY),
+      });
+    });
+    tvClosersSorted.sort(function (a, b) {
+      return b.closes - a.closes;
+    });
+    tvClosersSorted = tvClosersSorted.slice(0, 15);
+  }
+  var tvKnockerRows = tvKnockersSorted.map(function (r) {
+    return {
+      rid: r.rid,
+      name: r.name,
+      primary: r.sets,
+      primaryLabel: "Sets",
+      d2c: r.d2c,
+      c2s: r.c2s,
+      streak: r.streak,
+    };
+  });
+  var tvCloserRows = tvClosersSorted.map(function (r) {
+    return {
+      rid: r.rid,
+      name: r.name,
+      primary: r.closes,
+      primaryLabel: "Closed",
+      closeRate: r.closeRate,
+      streak: r.streak,
+    };
+  });
+  var tvMvpWeek = tvMode && selM ? weeklyMVP(data, selM, TODAY) : null;
+  var tvMarketCard = null;
+  if (tvMode && selM) {
+    if (!isRegion(selM)) {
+      tvMarketCard = {
+        title: data.markets[selM] ? data.markets[selM].name : "Market",
+        region: false,
+        st: aggregateMarketChallenge(data, selM, tvWeekDates),
+      };
+    } else {
+      var tvReg = { doors: 0, sets: 0, closes: 0, convos: 0, appts: 0, reps: 0 };
+      mIds.forEach(function (mid) {
+        var st = aggregateMarketChallenge(data, mid, tvWeekDates);
+        tvReg.doors += st.doors;
+        tvReg.sets += st.sets;
+        tvReg.closes += st.closes;
+        tvReg.convos += st.convos;
+        tvReg.appts += st.appts;
+        tvReg.reps += st.reps;
+      });
+      tvReg.d2c = tvReg.doors > 0 ? pct(tvReg.convos, tvReg.doors) : 0;
+      tvReg.c2s = tvReg.convos > 0 ? pct(tvReg.sets, tvReg.convos) : 0;
+      tvMarketCard = {
+        title: "All Offices",
+        region: true,
+        marketCount: mIds.length,
+        st: tvReg,
+      };
+    }
+  }
+  var tvChallengeBlocks = [];
+  if (tvMode && mIds.length >= 2) {
+    var tvChallengeMon = weekStartMonday(TODAY);
+    var tvChallengeDates = getDatesInRange(tvChallengeMon, addDaysYmd(tvChallengeMon, 6));
+    var tvChallengeRound = challengeWeekRoundIndex(tvChallengeMon);
+    var tvPairsAll = officeChallengePairs(mIds, tvChallengeRound);
+    var tvPairsFiltered =
+      selM && !isRegion(selM)
+        ? tvPairsAll.filter(function (cp) {
+            return cp.b === null ? cp.a === selM : cp.a === selM || cp.b === selM;
+          })
+        : tvPairsAll;
+    var tvPresentChallengeWeek = tvChallengeMon === challengeThisMonday;
+    tvChallengeBlocks = tvPairsFiltered.map(function (pair) {
+      var key = pair.b === null ? "bye-" + pair.a : pair.a + "-" + pair.b;
+      if (pair.b === null) {
+        return {
+          key: key,
+          bye: true,
+          byeName: data.markets[pair.a] ? data.markets[pair.a].name : pair.a,
+        };
+      }
+      var stA = aggregateMarketChallenge(data, pair.a, tvChallengeDates);
+      var stB = aggregateMarketChallenge(data, pair.b, tvChallengeDates);
+      var tie = stA.closes === stB.closes;
+      var winA = stA.closes > stB.closes;
+      var winB = stB.closes > stA.closes;
+      var bannerText;
+      if (tie) {
+        bannerText = tvPresentChallengeWeek ? "Tied on closes" : "Finished tied on closes";
+      } else {
+        var wname = winA ? data.markets[pair.a].name : data.markets[pair.b].name;
+        bannerText = tvPresentChallengeWeek ? wname + " leads" : wname + " won";
+      }
+      return {
+        key: key,
+        bye: false,
+        bannerText: bannerText,
+        left: {
+          name: data.markets[pair.a] ? data.markets[pair.a].name : "",
+          closes: stA.closes,
+          sets: stA.sets,
+          doors: stA.doors,
+          lead: winA && !tie,
+        },
+        right: {
+          name: data.markets[pair.b] ? data.markets[pair.b].name : "",
+          closes: stB.closes,
+          sets: stB.sets,
+          doors: stB.doors,
+          lead: winB && !tie,
+        },
+      };
+    });
+  }
 
   var report7 = getDatesInRange(daysAgo(6), TODAY);
   var reportPrev7 = getDatesInRange(daysAgo(13), daysAgo(7));
@@ -2750,7 +3099,7 @@ export default function App() {
       : 0;
   var profRevEst = profileRep && profileRep.role === "closer" ? Math.round(profMonthCloses * profDeal) : 0;
 
-  var showRange = tab !== "enter" && tab !== "manage" && tab !== "accountability" && tab !== "report";
+  var showRange = tab !== "enter" && tab !== "manage" && tab !== "accountability" && tab !== "report" && tab !== "challenge";
 
   function renderFlagCard(item) {
     var rid = item.rid,
@@ -2904,7 +3253,7 @@ export default function App() {
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
       <style>
         {
-          ":root,body,*{font-family:'DM Sans',-apple-system,sans-serif}input,select,textarea,button{font-family:inherit}@media (max-width:768px){.header-shell{grid-template-columns:minmax(0,1fr) auto!important}.header-brand-block{display:none!important}.header-office-picker{justify-self:start!important}.header-office-picker .office-picker-trigger-btn{justify-content:flex-start!important;text-align:left!important}.header-office-picker .office-picker-menu{left:0!important;transform:none!important;right:auto!important}}@media print{.weekly-report-print *{box-shadow:none!important}.no-print{display:none!important}.weekly-report-print{padding:16px}}"
+          ":root,body,*{font-family:'DM Sans',-apple-system,sans-serif}input,select,textarea,button{font-family:inherit}.header-brand-home{color:inherit;text-decoration:none;cursor:pointer;border-radius:6px;padding:2px 4px;margin:-2px -4px}.header-brand-home:hover,.header-brand-home:focus-visible{outline:none}@media (max-width:768px){.header-shell{grid-template-columns:minmax(0,1fr) auto!important}.header-brand-block{display:none!important}.header-office-picker{justify-self:start!important}.header-office-picker .office-picker-trigger-btn{justify-content:flex-start!important;text-align:left!important}.header-office-picker .office-picker-menu{left:0!important;transform:none!important;right:auto!important}}@media print{.weekly-report-print *{box-shadow:none!important}.no-print{display:none!important}.weekly-report-print{padding:16px}}"
         }
       </style>
 
@@ -2926,7 +3275,25 @@ export default function App() {
       >
         <div className="header-brand-block" style={{ display: "flex", alignItems: "center", gap: 8, justifySelf: "start", minWidth: 0 }}>
           <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#FF3B30", flexShrink: 0 }} />
-          <span style={{ fontWeight: 800, fontSize: 20, color: "#1C1C1E", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Jake's Region</span>
+          <a
+            href="#"
+            className="header-brand-home"
+            aria-label="Home — Dashboard"
+            title="Home"
+            onClick={function (e) {
+              e.preventDefault();
+              setTab("dashboard");
+              setOfficePickerOpen(false);
+              setProfileMenuOpen(false);
+              setAccessNotifOpen(false);
+              setTvMode(false);
+              setProfileRepId(null);
+              window.scrollTo(0, 0);
+            }}
+            style={{ fontWeight: 800, fontSize: 20, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}
+          >
+            Jake's Region
+          </a>
         </div>
         <div
           ref={officePickerRef}
@@ -3090,6 +3457,36 @@ export default function App() {
           ) : null}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, justifySelf: "end" }}>
+          <button
+            type="button"
+            aria-label="TV display mode"
+            title="TV display mode"
+            onClick={function (e) {
+              e.stopPropagation();
+              setTvMode(true);
+              setAccessNotifOpen(false);
+              setProfileMenuOpen(false);
+              setOfficePickerOpen(false);
+            }}
+            style={{
+              border: "none",
+              background: "transparent",
+              cursor: "pointer",
+              padding: 4,
+              margin: 0,
+              lineHeight: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              opacity: 0.8,
+            }}
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+              <rect x="2" y="4" width="20" height="14" rx="2" stroke="#1C1C1E" strokeWidth="1.75" />
+              <path d="M8 21h8" stroke="#1C1C1E" strokeWidth="1.75" strokeLinecap="round" />
+              <path d="M12 18v3" stroke="#1C1C1E" strokeWidth="1.75" strokeLinecap="round" />
+            </svg>
+          </button>
           {showInviteUi ? (
             <div ref={accessNotifRef} style={{ position: "relative" }}>
               <button
@@ -3373,6 +3770,30 @@ export default function App() {
         <div className="no-print" style={{ position: "fixed", top: 64, right: 14, zIndex: 9999, background: "#1C1C1E", color: "#fff", fontSize: 13, fontWeight: 600, padding: "10px 20px", borderRadius: 12, boxShadow: shL }}>
           {toast}
         </div>
+      ) : null}
+
+      {tvMode ? (
+        <TVView
+          regionLabel={"Jake's Region"}
+          marketName={tvMarketTitle}
+          officeName={officeScopeTitle}
+          rangeLabel={tvWeekDisplayLabel}
+          isRegionScope={isRegion(selM)}
+          onSelectRegion={function () {
+            setSelM(REGION_KEY);
+          }}
+          onSelectMarket={function () {
+            if (isRegion(selM) && mIds.length) setSelM(mIds[0]);
+          }}
+          mvpWeek={tvMvpWeek}
+          marketCard={tvMarketCard}
+          knockerRows={tvKnockerRows}
+          closerRows={tvCloserRows}
+          challengeBlocks={tvChallengeBlocks}
+          onClose={function () {
+            setTvMode(false);
+          }}
+        />
       ) : null}
 
       {manageUsersOpen && access ? (
@@ -4436,84 +4857,93 @@ export default function App() {
           ))}
 
         {tab === "challenge" && (
-          <div>
-            <h2 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 8px 0" }}>Office challenge</h2>
-            <p style={{ fontSize: 12, color: "#8E8E93", margin: "0 0 14px 0" }}>Compare two markets using the date range above.</p>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#8E8E93", marginBottom: 6 }}>Market A</div>
-                <select
-                  value={chA || ""}
-                  onChange={function (e) {
-                    setChMktA(e.target.value || null);
-                  }}
-                  style={{ fontSize: 14, padding: "10px 14px", borderRadius: 10, border: "1px solid #E5E5EA", minWidth: 160 }}
-                >
-                  {mIds.map(function (id) {
-                    return (
-                      <option key={id} value={id}>
-                        {data.markets[id].name}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#8E8E93", marginBottom: 6 }}>Market B</div>
-                <select
-                  value={chB || ""}
-                  onChange={function (e) {
-                    setChMktB(e.target.value || null);
-                  }}
-                  style={{ fontSize: 14, padding: "10px 14px", borderRadius: 10, border: "1px solid #E5E5EA", minWidth: 160 }}
-                >
-                  {mIds.map(function (id) {
-                    return (
-                      <option key={id} value={id}>
-                        {data.markets[id].name}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
+          <div data-no-swipe-tab>
+            <div
+              style={{
+                display: "flex",
+                gap: 6,
+                marginBottom: 14,
+                overflowX: "auto",
+                WebkitOverflowScrolling: "touch",
+                padding: "4px 0 8px",
+                scrollSnapType: "x proximity",
+              }}
+            >
+              {challengeWeekTabsList.map(function (w) {
+                var sel = challengeWeekStart === w.mon;
+                return (
+                  <button
+                    key={w.mon}
+                    type="button"
+                    onClick={function () {
+                      setChallengeWeekStart(w.mon);
+                    }}
+                    style={{
+                      scrollSnapAlign: "center",
+                      flexShrink: 0,
+                      padding: "8px 12px",
+                      fontSize: 12,
+                      fontWeight: sel ? 700 : 500,
+                      color: sel ? "#fff" : "#8E8E93",
+                      background: sel ? "#1C1C1E" : "#fff",
+                      border: "none",
+                      borderRadius: 10,
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                      boxShadow: sel ? "none" : sh,
+                      lineHeight: 1.25,
+                      textAlign: "left",
+                    }}
+                  >
+                    <div>{w.isThisWeek ? "This week" : w.label}</div>
+                    {w.isThisWeek ? (
+                      <div style={{ fontSize: 10, fontWeight: 600, opacity: sel ? 0.85 : 0.9, marginTop: 2 }}>{w.label}</div>
+                    ) : null}
+                  </button>
+                );
+              })}
             </div>
-            {chAstats && chBstats && chA !== chB ? (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                {[
-                  { label: "Market A", id: chA, s: chAstats },
-                  { label: "Market B", id: chB, s: chBstats },
-                ].map(function (col) {
+            <h2 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 8px 0" }}>Weekly Challenge</h2>
+            <p style={{ fontSize: 12, color: "#8E8E93", margin: "0 0 14px 0" }}>
+              {challengeWeekStart === challengeThisMonday ? (
+                <>
+                  Mon–Sun weeks only. Pairings rotate each week; whoever has the most <strong>closes</strong> this week leads the matchup.
+                </>
+              ) : (
+                <>
+                  Mon–Sun weeks only. Pairings rotated each week; the winner on each matchup was whoever had the most <strong>closes</strong> that week.
+                </>
+              )}
+            </p>
+            {mIds.length < 2 ? (
+              <Card>
+                <p style={{ color: "#8E8E93", margin: 0 }}>Add at least two offices to run weekly matchups.</p>
+              </Card>
+            ) : isRegion(selM) ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {challengePairs.map(function (pair) {
+                  var k = pair.b === null ? "bye-" + pair.a : pair.a + "-" + pair.b;
                   return (
-                    <Card key={col.id} bc={challengeWinner === col.id ? "#34C759" : undefined}>
-                      <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 8 }}>{data.markets[col.id] ? data.markets[col.id].name : ""}</div>
-                      <div style={{ fontSize: 13, color: "#8E8E93", marginBottom: 10 }}>{challengeDates.length + " days in range"}</div>
-                      <div style={{ display: "grid", gap: 8, fontSize: 14 }}>
-                        <div>
-                          <strong>{col.s.doors}</strong> doors
-                        </div>
-                        <div>
-                          <strong>{col.s.convos}</strong> convos
-                        </div>
-                        <div>
-                          <strong>{col.s.sets}</strong> sets
-                        </div>
-                        <div>
-                          <strong style={{ color: "#34C759" }}>{col.s.closes}</strong> closes
-                        </div>
-                        <div>
-                          D2C <strong>{col.s.d2c}</strong>%
-                        </div>
-                        <div>
-                          C2S <strong>{col.s.c2s}</strong>%
-                        </div>
-                      </div>
-                    </Card>
+                    <ChallengeMatchupBlock
+                      key={k}
+                      data={data}
+                      pair={pair}
+                      challengeDates={challengeDates}
+                      isPresentWeek={challengeWeekStart === challengeThisMonday}
+                    />
                   );
                 })}
               </div>
+            ) : challengePairForOffice ? (
+              <ChallengeMatchupBlock
+                data={data}
+                pair={challengePairForOffice}
+                challengeDates={challengeDates}
+                isPresentWeek={challengeWeekStart === challengeThisMonday}
+              />
             ) : (
               <Card>
-                <p style={{ color: "#8E8E93", margin: 0 }}>Pick two different markets.</p>
+                <p style={{ color: "#8E8E93", margin: 0 }}>Could not resolve a matchup for this office.</p>
               </Card>
             )}
           </div>
@@ -5066,16 +5496,22 @@ export default function App() {
             {profRamp ? (
               <Card>
                 <SL>New hire ramp (first 30 days)</SL>
-                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontSize: 13 }}>
-                  <div>
-                    <strong>Wk 1</strong> avg doors {profRamp.w1.doors}, sets {profRamp.w1.sets}
-                  </div>
-                  <div>
-                    <strong>Wk 2</strong> avg doors {profRamp.w2.doors}, sets {profRamp.w2.sets}
-                  </div>
-                  <div>
-                    <strong>Wk 3</strong> avg doors {profRamp.w3.doors}, sets {profRamp.w3.sets}
-                  </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 13 }}>
+                  {[profRamp.w1, profRamp.w2, profRamp.w3, profRamp.w4].map(function (w, idx) {
+                    return (
+                      <div key={idx}>
+                        <strong>Wk {idx + 1}</strong>
+                        {" — avg doors "}
+                        {w.doors}, convos {w.convos}, sets {w.sets}, closes {w.closes}
+                        {profileRep.role === "closer" ? (
+                          <span>
+                            {", appts "}
+                            {w.appts}
+                          </span>
+                        ) : null}
+                      </div>
+                    );
+                  })}
                 </div>
               </Card>
             ) : null}
