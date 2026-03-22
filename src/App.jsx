@@ -10,6 +10,7 @@ import {
 import {
   deleteField,
   doc,
+  FieldPath,
   getDoc,
   onSnapshot,
   runTransaction,
@@ -17,6 +18,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { auth, db } from "./firebase.js";
+import notifPng from "./assets/notif.png";
 import {
   LineChart,
   Line,
@@ -31,13 +33,27 @@ import {
 } from "recharts";
 
 var DD = { markets: {}, reps: {}, dailyKPIs: {}, accountabilityLog: {}, settings: {}, eventLog: [] };
-var ACCESS_DD = { users: {}, invites: {}, ownerUid: null };
+var ACCESS_DD = { users: {}, invites: {}, pendingInvites: {}, ownerUid: null, accessRequests: {} };
 var ROLE_RANK = { owner: 2, admin: 1, default: 0 };
 var EVENT_LOG_MAX = 400;
 var PROMO_SALES_NEED = 8;
 var PROMO_RECRUITS_NEED = 2;
 var TODAY = new Date().toISOString().split("T")[0];
 var REGION_KEY = "__REGION__";
+
+/** Main nav tab order (used for mobile swipe between tabs). */
+var MAIN_TABS = [
+  { k: "dashboard", l: "Dashboard" },
+  { k: "enter", l: "Enter" },
+  { k: "knockerboard", l: "Knockers" },
+  { k: "closerboard", l: "Closers" },
+  { k: "trends", l: "Trends" },
+  { k: "accountability", l: "Log" },
+  { k: "rollup", l: "Markets" },
+  { k: "challenge", l: "Challenge" },
+  { k: "report", l: "Report" },
+  { k: "manage", l: "Manage" },
+];
 
 function isRegion(selM) {
   return selM === REGION_KEY;
@@ -48,6 +64,20 @@ function eventLogMatchesSelection(selM, e) {
   var mid = e && e.marketId;
   if (mid == null || mid === "") return false;
   return mid === selM;
+}
+/** Rolling window from entry timestamp. range: day | week | month | all */
+function eventLogMatchesTimeRange(e, range) {
+  if (range === "all") return true;
+  if (!e || !e.ts) return false;
+  var t = new Date(e.ts).getTime();
+  if (isNaN(t)) return false;
+  var now = Date.now();
+  var msDay = 86400000;
+  var maxAge = range === "day" ? msDay : range === "week" ? 7 * msDay : range === "month" ? 30 * msDay : 0;
+  return now - t <= maxAge;
+}
+function eventLogEntryMatchesFilters(selM, timeRange, e) {
+  return eventLogMatchesSelection(selM, e) && eventLogMatchesTimeRange(e, timeRange);
 }
 function onRoster(rep) {
   return rep.active !== false && rep.terminated !== true;
@@ -177,6 +207,10 @@ function roleLabel(r) {
   if (r === "admin") return "Admin";
   return "Default";
 }
+/** Stable key for a not-yet-signed-in user row under access.users (map key, not a Firebase UID). */
+function emailSlotKey(normalizedEmail) {
+  return "email:" + normalizedEmail;
+}
 async function bootstrapOwnerIfNeeded(user) {
   var ref = accessRef();
   await runTransaction(db, function (transaction) {
@@ -199,48 +233,116 @@ async function bootstrapOwnerIfNeeded(user) {
             },
           },
           invites: data.invites && typeof data.invites === "object" ? data.invites : {},
+          pendingInvites: data.pendingInvites && typeof data.pendingInvites === "object" ? data.pendingInvites : {},
+          accessRequests: data.accessRequests && typeof data.accessRequests === "object" ? data.accessRequests : {},
         },
         { merge: true }
       );
     });
   });
 }
-/** @returns {Promise<{ email: string, role: string } | null>} */
-async function redeemInviteToken(token, firebaseUser) {
+/** True if this email can still be linked on first sign-in (placeholder row, legacy pendingInvites, or legacy token invite). */
+function hasPendingForEmail(access, em) {
+  if (!em || !access) return false;
+  var users = access.users && typeof access.users === "object" ? access.users : {};
+  var sk = emailSlotKey(em);
+  if (users[sk] && users[sk].pending) return true;
+  if (access.pendingInvites && access.pendingInvites[em]) return true;
+  var invites = access.invites && typeof access.invites === "object" ? access.invites : {};
+  for (var tok in invites) {
+    var inv = invites[tok];
+    if (inv && normalizeEmail(inv.email) === em) return true;
+  }
+  return false;
+}
+/**
+ * Link Firebase auth to access.users: placeholder row users["email:…"], legacy pendingInvites[email], or legacy invites[token].
+ * @returns {Promise<{ email: string, role: string } | null>}
+ */
+async function claimInviteForUser(firebaseUser) {
   var ref = accessRef();
+  var em = normalizeEmail(firebaseUser.email);
+  if (!em) return null;
   var result = null;
   await runTransaction(db, function (transaction) {
     return transaction.get(ref).then(function (snap) {
       if (!snap.exists()) throw new Error("Access is not configured yet.");
       var data = snap.data();
       var users = data.users && typeof data.users === "object" ? data.users : {};
-      var invites = data.invites && typeof data.invites === "object" ? data.invites : {};
       if (users[firebaseUser.uid]) return;
-      var inv = invites[token];
-      if (!inv) throw new Error("This invite link is invalid or was already used.");
-      if (normalizeEmail(firebaseUser.email) !== normalizeEmail(inv.email)) {
-        throw new Error("Sign in with Google using " + inv.email + " to accept this invite.");
-      }
       var now = new Date().toISOString();
-      var newUsers = { ...users };
-      var invitedRole = inv.role === "owner" ? "owner" : inv.role === "admin" ? "admin" : "default";
-      result = { email: normalizeEmail(firebaseUser.email), role: invitedRole };
-      newUsers[firebaseUser.uid] = {
-        email: normalizeEmail(firebaseUser.email),
+      var pendingInvites = data.pendingInvites && typeof data.pendingInvites === "object" ? data.pendingInvites : {};
+      var pending = pendingInvites[em];
+      var invites = data.invites && typeof data.invites === "object" ? data.invites : {};
+      function roleFromStored(r) {
+        return r === "owner" ? "owner" : r === "admin" ? "admin" : "default";
+      }
+      var sk = emailSlotKey(em);
+      var emailSlot = users[sk];
+      if (emailSlot && emailSlot.pending) {
+        var prSlot = roleFromStored(emailSlot.role);
+        result = { email: em, role: prSlot };
+        var userRowSlot = {
+          email: em,
+          displayName: firebaseUser.displayName || "",
+          photoURL: firebaseUser.photoURL || "",
+          role: prSlot,
+          updatedAt: now,
+        };
+        transaction.update(
+          ref,
+          new FieldPath("users", firebaseUser.uid),
+          userRowSlot,
+          new FieldPath("users", sk),
+          deleteField()
+        );
+        return;
+      }
+      if (pending) {
+        var pr = roleFromStored(pending.role);
+        result = { email: em, role: pr };
+        var userRow = {
+          email: em,
+          displayName: firebaseUser.displayName || "",
+          photoURL: firebaseUser.photoURL || "",
+          role: pr,
+          updatedAt: now,
+        };
+        // Must use FieldPath + varargs update — computed object keys break FieldPath (see Firebase docs).
+        transaction.update(
+          ref,
+          new FieldPath("users", firebaseUser.uid),
+          userRow,
+          new FieldPath("pendingInvites", em),
+          deleteField()
+        );
+        return;
+      }
+      var tokenToDelete = null;
+      for (var tok in invites) {
+        var inv = invites[tok];
+        if (inv && normalizeEmail(inv.email) === em) {
+          tokenToDelete = tok;
+          break;
+        }
+      }
+      if (!tokenToDelete) return;
+      var inv2 = invites[tokenToDelete];
+      var invitedRole = roleFromStored(inv2.role);
+      result = { email: em, role: invitedRole };
+      var userRow2 = {
+        email: em,
         displayName: firebaseUser.displayName || "",
         photoURL: firebaseUser.photoURL || "",
         role: invitedRole,
         updatedAt: now,
       };
-      var newInvites = { ...invites };
-      delete newInvites[token];
-      transaction.set(
+      transaction.update(
         ref,
-        {
-          users: newUsers,
-          invites: newInvites,
-        },
-        { merge: true }
+        new FieldPath("users", firebaseUser.uid),
+        userRow2,
+        new FieldPath("invites", tokenToDelete),
+        deleteField()
       );
     });
   });
@@ -1211,6 +1313,9 @@ export default function App() {
   var _evl = useState(false),
     eventLogOpen = _evl[0],
     setEventLogOpen = _evl[1];
+  var _alr = useState("all"),
+    activityLogRange = _alr[0],
+    setActivityLogRange = _alr[1];
   var _ac = useState(null),
     access = _ac[0],
     setAccess = _ac[1];
@@ -1232,14 +1337,58 @@ export default function App() {
   var _ir = useState("default"),
     inviteRoleIn = _ir[0],
     setInviteRoleIn = _ir[1];
-  var _iw = useState(false),
-    inviteWorking = _iw[0],
-    setInviteWorking = _iw[1];
-  var _il = useState(""),
-    inviteLinkOut = _il[0],
-    setInviteLinkOut = _il[1];
+  var _cf = useState(false),
+    claimFailed = _cf[0],
+    setClaimFailed = _cf[1];
+  var _an = useState(false),
+    accessNotifOpen = _an[0],
+    setAccessNotifOpen = _an[1];
+  var _op = useState(false),
+    officePickerOpen = _op[0],
+    setOfficePickerOpen = _op[1];
   var profileMenuRef = useRef(null);
-  var redeemDoneRef = useRef(false);
+  var accessNotifRef = useRef(null);
+  var officePickerRef = useRef(null);
+  var claimStartedRef = useRef(false);
+  var swipeTabTouchRef = useRef({ x: 0, y: 0, ignore: false });
+
+  var onSwipeTabTouchStart = useCallback(function (e) {
+    if (typeof window !== "undefined" && !window.matchMedia("(max-width: 768px)").matches) return;
+    var el = e.target;
+    if (el && el.closest && (el.closest("input, textarea, select") || el.closest("[data-no-swipe-tab]"))) {
+      swipeTabTouchRef.current.ignore = true;
+      return;
+    }
+    swipeTabTouchRef.current.ignore = false;
+    if (!e.touches || e.touches.length === 0) return;
+    swipeTabTouchRef.current.x = e.touches[0].clientX;
+    swipeTabTouchRef.current.y = e.touches[0].clientY;
+  }, []);
+
+  var onSwipeTabTouchEnd = useCallback(
+    function (e) {
+      if (swipeTabTouchRef.current.ignore) {
+        swipeTabTouchRef.current.ignore = false;
+        return;
+      }
+      if (typeof window !== "undefined" && !window.matchMedia("(max-width: 768px)").matches) return;
+      var start = swipeTabTouchRef.current;
+      if (!e.changedTouches || e.changedTouches.length === 0) return;
+      var endX = e.changedTouches[0].clientX;
+      var endY = e.changedTouches[0].clientY;
+      var dx = endX - start.x;
+      var dy = endY - start.y;
+      if (Math.abs(dx) < 64 || Math.abs(dx) < Math.abs(dy) * 1.35) return;
+      var keys = MAIN_TABS.map(function (x) {
+        return x.k;
+      });
+      var idx = keys.indexOf(tab);
+      if (idx < 0) return;
+      if (dx < 0 && idx < keys.length - 1) setTab(keys[idx + 1]);
+      else if (dx > 0 && idx > 0) setTab(keys[idx - 1]);
+    },
+    [tab, setTab]
+  );
 
   useEffect(function () {
     var unsub = onAuthStateChanged(auth, function (u) {
@@ -1260,8 +1409,8 @@ export default function App() {
     if (!authReady || !user) {
       setAccess(null);
       setAccessReady(false);
-      setInviteLinkOut("");
-      redeemDoneRef.current = false;
+      setClaimFailed(false);
+      claimStartedRef.current = false;
       return;
     }
     var aref = accessRef();
@@ -1274,6 +1423,8 @@ export default function App() {
           ...d,
           users: d.users && typeof d.users === "object" ? d.users : {},
           invites: d.invites && typeof d.invites === "object" ? d.invites : {},
+          pendingInvites: d.pendingInvites && typeof d.pendingInvites === "object" ? d.pendingInvites : {},
+          accessRequests: d.accessRequests && typeof d.accessRequests === "object" ? d.accessRequests : {},
         };
         setAccess(merged);
         var nUsers = Object.keys(merged.users || {}).length;
@@ -1384,6 +1535,51 @@ export default function App() {
     }, ms != null ? ms : 2000);
   }
 
+  function submitAccessRequest() {
+    if (!user || !access) return;
+    var email = normalizeEmail(user.email);
+    if (!email) {
+      flash("Sign in with a Google account that has an email address.");
+      return;
+    }
+    var reqs = access.accessRequests && typeof access.accessRequests === "object" ? access.accessRequests : {};
+    var existingId = null;
+    Object.keys(reqs).forEach(function (id) {
+      var r = reqs[id];
+      if (!r) return;
+      if (r.uid === user.uid || normalizeEmail(r.email) === email) existingId = id;
+    });
+    if (existingId) {
+      flash("You already have a pending access request.");
+      return;
+    }
+    var id =
+      typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : gid() + gid();
+    var now = new Date().toISOString();
+    setDoc(
+      accessRef(),
+      {
+        accessRequests: {
+          [id]: {
+            email: email,
+            displayName: user.displayName || "",
+            photoURL: user.photoURL || "",
+            uid: user.uid,
+            requestedAt: now,
+          },
+        },
+      },
+      { merge: true }
+    )
+      .then(function () {
+        flash("Access requested. An owner or admin will review it.");
+        appendEventLogEntry("Access requested — " + email, email).catch(function () {});
+      })
+      .catch(function (e) {
+        flash(e.message || "Could not submit request.");
+      });
+  }
+
   useEffect(function () {
     if (!user || !accessReady || !access) return;
     var umap = access.users || {};
@@ -1421,44 +1617,46 @@ export default function App() {
   useEffect(
     function () {
       if (!user || !accessReady || !access) return;
-      var params = new URLSearchParams(window.location.search);
-      var token = params.get("invite");
-      if (!token) {
-        redeemDoneRef.current = false;
-        return;
-      }
+      var em = normalizeEmail(user.email);
+      if (em && hasPendingForEmail(access, em)) setClaimFailed(false);
+    },
+    [user, accessReady, access]
+  );
+
+  useEffect(
+    function () {
+      if (!user || !accessReady || !access) return;
       if (access.users && access.users[user.uid]) {
-        params.delete("invite");
-        var q1 = params.toString();
-        window.history.replaceState({}, "", window.location.pathname + (q1 ? "?" + q1 : "") + window.location.hash);
-        redeemDoneRef.current = false;
+        var params = new URLSearchParams(window.location.search);
+        if (params.get("invite")) {
+          params.delete("invite");
+          var q1 = params.toString();
+          window.history.replaceState({}, "", window.location.pathname + (q1 ? "?" + q1 : "") + window.location.hash);
+        }
         return;
       }
-      if (redeemDoneRef.current) return;
-      redeemDoneRef.current = true;
-      setInviteWorking(true);
-      redeemInviteToken(token, user)
+      var em = normalizeEmail(user.email);
+      if (!em || !hasPendingForEmail(access, em)) return;
+      if (claimStartedRef.current) return;
+      claimStartedRef.current = true;
+      claimInviteForUser(user)
         .then(function (info) {
-          params.delete("invite");
-          var q2 = params.toString();
-          window.history.replaceState({}, "", window.location.pathname + (q2 ? "?" + q2 : "") + window.location.hash);
-          flash("Invite accepted — you now have access.");
-          if (info && user && user.email) {
-            appendEventLogEntry(
-              "Invite accepted — " + info.email + " (" + roleLabel(info.role) + ")",
-              user.email
-            ).catch(function () {});
+          if (info && user.email) {
+            flash("You're in.");
+            appendEventLogEntry("Access granted — " + info.email + " (" + roleLabel(info.role) + ")", user.email).catch(function () {});
           }
+          var params2 = new URLSearchParams(window.location.search);
+          if (params2.get("invite")) {
+            params2.delete("invite");
+            var q2 = params2.toString();
+            window.history.replaceState({}, "", window.location.pathname + (q2 ? "?" + q2 : "") + window.location.hash);
+          }
+          if (!info) claimStartedRef.current = false;
         })
         .catch(function (e) {
-          flash(e.message || "Could not use invite.");
-          params.delete("invite");
-          var q3 = params.toString();
-          window.history.replaceState({}, "", window.location.pathname + (q3 ? "?" + q3 : "") + window.location.hash);
-          redeemDoneRef.current = false;
-        })
-        .finally(function () {
-          setInviteWorking(false);
+          flash(e.message || "Could not grant access.");
+          setClaimFailed(true);
+          claimStartedRef.current = false;
         });
     },
     [user, accessReady, access]
@@ -1478,6 +1676,43 @@ export default function App() {
       };
     },
     [profileMenuOpen]
+  );
+
+  useEffect(
+    function () {
+      if (!accessNotifOpen) return;
+      function onDown(e) {
+        if (accessNotifRef.current && !accessNotifRef.current.contains(e.target)) {
+          setAccessNotifOpen(false);
+        }
+      }
+      document.addEventListener("mousedown", onDown);
+      return function () {
+        document.removeEventListener("mousedown", onDown);
+      };
+    },
+    [accessNotifOpen]
+  );
+
+  useEffect(
+    function () {
+      if (!officePickerOpen) return;
+      function onDown(e) {
+        if (officePickerRef.current && !officePickerRef.current.contains(e.target)) {
+          setOfficePickerOpen(false);
+        }
+      }
+      function onKey(e) {
+        if (e.key === "Escape") setOfficePickerOpen(false);
+      }
+      document.addEventListener("mousedown", onDown);
+      document.addEventListener("keydown", onKey);
+      return function () {
+        document.removeEventListener("mousedown", onDown);
+        document.removeEventListener("keydown", onKey);
+      };
+    },
+    [officePickerOpen]
   );
 
   function setRange(s, e) {
@@ -1817,18 +2052,27 @@ export default function App() {
     );
   }
 
-  if (inviteWorking)
+  var emForClaim = user && user.email ? normalizeEmail(user.email) : "";
+  if (
+    accessReady &&
+    access &&
+    user &&
+    !access.users[user.uid] &&
+    emForClaim &&
+    hasPendingForEmail(access, emForClaim) &&
+    !claimFailed
+  ) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", color: "#8E8E93" }}>
-        Accepting invite…
+        Loading…
       </div>
     );
+  }
 
   if (!accessAllowed)
     return (
       <div style={{ minHeight: "100vh", background: "#F2F2F7", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
         <div style={{ width: "100%", maxWidth: 440 }}>
-          <div style={{ fontWeight: 900, fontSize: 22, marginBottom: 12, color: "#1C1C1E", textAlign: "center" }}>No access</div>
           {user ? (
             <div
               style={{
@@ -1878,29 +2122,26 @@ export default function App() {
             <div style={{ color: "#8E8E93", fontWeight: 600, marginBottom: 18, lineHeight: 1.5, textAlign: "center", fontSize: 14 }}>Access could not be initialized.</div>
           )}
           {accessUserCount > 0 ? (
-            <p style={{ color: "#8E8E93", fontWeight: 600, fontSize: 12, margin: "0 0 16px 0", lineHeight: 1.45, textAlign: "center" }}>
-              Ask an owner or admin for an invite, or sign in with the email that was invited.
-            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "stretch" }}>
+              <Btn
+                onClick={function () {
+                  submitAccessRequest();
+                }}
+                style={{ padding: "12px 18px", borderRadius: 12, width: "100%" }}
+              >
+                Request access
+              </Btn>
+              <Btn
+                v="secondary"
+                onClick={function () {
+                  trySwitchGoogleAccount().catch(function () {});
+                }}
+                style={{ padding: "12px 18px", borderRadius: 12, width: "100%" }}
+              >
+                Choose a different Google account
+              </Btn>
+            </div>
           ) : null}
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "stretch" }}>
-            <Btn
-              v="secondary"
-              onClick={function () {
-                trySwitchGoogleAccount().catch(function () {});
-              }}
-              style={{ padding: "12px 18px", borderRadius: 12, width: "100%" }}
-            >
-              Choose a different Google account
-            </Btn>
-            <Btn
-              onClick={function () {
-                doSignOut().catch(function () {});
-              }}
-              style={{ padding: "12px 18px", borderRadius: 12, width: "100%" }}
-            >
-              Sign out
-            </Btn>
-          </div>
           {toast ? (
             <div style={{ marginTop: 14, color: "#8E8E93", fontWeight: 600, fontSize: 12, textAlign: "center" }}>{toast}</div>
           ) : null}
@@ -1918,87 +2159,280 @@ export default function App() {
   var myRole = accessRow.role || "default";
   var showInviteUi = myRole === "owner" || myRole === "admin";
   var isOwnerUi = myRole === "owner";
-
-  function buildInviteUrl(token) {
-    var u = new URL(window.location.href);
-    u.searchParams.set("invite", token);
-    return u.toString();
+  var pendingAccessRequests = [];
+  if (access && access.accessRequests && typeof access.accessRequests === "object") {
+    Object.keys(access.accessRequests).forEach(function (rid) {
+      var row = access.accessRequests[rid];
+      if (row && typeof row === "object") pendingAccessRequests.push({ id: rid, ...row });
+    });
+    pendingAccessRequests.sort(function (a, b) {
+      return String(a.requestedAt || "").localeCompare(String(b.requestedAt || ""));
+    });
   }
-  function createAccessInvite() {
+
+  function addPendingAccessByEmail() {
     if (!user || !access || !access.users || !access.users[user.uid]) return;
     var email = normalizeEmail(inviteEmailIn);
     if (!email) {
-      flash("Enter an email address for the invite.");
+      flash("Enter an email address.");
+      return;
+    }
+    if (normalizeEmail(user.email) === email) {
+      flash("You're already signed in with that account.");
       return;
     }
     var inviterRole = access.users[user.uid].role || "default";
     if (!canInviteWithRole(inviterRole, inviteRoleIn)) {
-      flash("You can only invite at your level or below.");
+      flash("You can only add users at your level or below.");
       return;
     }
-    var token =
-      typeof crypto !== "undefined" && crypto.randomUUID
-        ? crypto.randomUUID()
-        : gid() + gid();
+    var umap = access.users || {};
+    for (var uk in umap) {
+      if (umap[uk] && normalizeEmail(umap[uk].email) === email) {
+        flash("That email is already on the list.");
+        return;
+      }
+    }
+    var leg = access.pendingInvites && typeof access.pendingInvites === "object" ? access.pendingInvites : {};
+    if (leg[email]) {
+      flash("That email already has pending access (legacy). It will apply on first sign-in.");
+      return;
+    }
+    var sk = emailSlotKey(email);
+    if (umap[sk]) {
+      flash("That email is already on the list.");
+      return;
+    }
     var now = new Date().toISOString();
     var roleToSet =
       inviteRoleIn === "owner" ? "owner" : inviteRoleIn === "admin" ? "admin" : "default";
     setDoc(
       accessRef(),
       {
-        invites: {
-          [token]: {
+        users: {
+          [sk]: {
             email: email,
             role: roleToSet,
+            pending: true,
             invitedBy: user.uid,
             createdAt: now,
+            displayName: "",
+            photoURL: "",
           },
         },
       },
       { merge: true }
     )
       .then(function () {
-        setInviteLinkOut(buildInviteUrl(token));
-        flash("Invite link ready — copy it below.");
+        flash("Added. They appear under Manage users; their Google sign-in links their account when they first open the app.");
         persist(data, {
-          message: "Invite created — " + email + " (" + roleLabel(roleToSet) + ")",
+          message: "Access added — " + email + " (" + roleLabel(roleToSet) + ")",
         });
       })
       .catch(function (e) {
-        flash(e.message || "Could not create invite.");
+        flash(e.message || "Could not add user.");
       });
   }
-  function demoteAccessUser(targetUid) {
-    if (!access || !access.users || !access.users[user.uid] || access.users[user.uid].role !== "owner") return;
-    if (targetUid === access.ownerUid) return;
+  function canActorEditUserRole(actorRole, targetUid, targetRow) {
+    if (!targetRow || actorRole === "default") return false;
+    if (targetUid === access.ownerUid) return false;
+    if (actorRole === "owner") return true;
+    if (actorRole === "admin") {
+      var tr = targetRow.role || "default";
+      if (tr === "owner" || tr === "admin") return false;
+      return true;
+    }
+    return false;
+  }
+  function roleOptionsForRow(actorRole, targetUid, targetRow) {
+    if (!canActorEditUserRole(actorRole, targetUid, targetRow)) return [];
+    if (actorRole === "admin") {
+      return ["default", "admin"].filter(function (r) {
+        return canInviteWithRole("admin", r);
+      });
+    }
+    return ["owner", "admin", "default"].filter(function (r) {
+      return canInviteWithRole("owner", r);
+    });
+  }
+  function setAccessUserRole(targetUid, newRole) {
+    if (!user || !access || !access.users || !access.users[user.uid]) return;
+    var actorRole = access.users[user.uid].role || "default";
+    if (actorRole !== "owner" && actorRole !== "admin") return;
     var row = access.users[targetUid];
-    if (!row || row.role !== "admin") return;
-    if (!confirm("Demote this admin to default access?")) return;
+    if (!row) return;
+    var oldRole = row.role || "default";
+    if (oldRole === newRole) return;
+    if (targetUid === access.ownerUid && newRole !== "owner") {
+      flash("The primary owner account must stay an owner.");
+      return;
+    }
+    if (!canActorEditUserRole(actorRole, targetUid, row)) {
+      flash("You can’t change this user’s role.");
+      return;
+    }
+    if (!canInviteWithRole(actorRole, newRole)) {
+      flash("You can only assign roles at or below your level.");
+      return;
+    }
+    if (actorRole === "admin" && (oldRole === "owner" || oldRole === "admin")) {
+      flash("Only an owner can change admins or owners.");
+      return;
+    }
+    if (newRole === "owner" && actorRole !== "owner") {
+      flash("Only an owner can assign the owner role.");
+      return;
+    }
+    var who = normalizeEmail(row.email) || row.displayName || targetUid;
     setDoc(
       accessRef(),
       {
         users: {
           [targetUid]: {
             ...row,
-            role: "default",
+            role: newRole,
             updatedAt: new Date().toISOString(),
           },
         },
       },
       { merge: true }
-    ).catch(function (e) {
-      flash(e.message || "Could not update user.");
-    });
+    )
+      .then(function () {
+        flash("Role updated.");
+        appendEventLogEntry("Role changed — " + who + ": " + roleLabel(oldRole) + " → " + roleLabel(newRole), user.email).catch(function () {});
+      })
+      .catch(function (e) {
+        flash(e.message || "Could not update role.");
+      });
   }
   function removeAccessUser(targetUid) {
-    if (!access || !access.users || !access.users[user.uid] || access.users[user.uid].role !== "owner") return;
+    if (!access || !access.users || !access.users[user.uid]) return;
+    var actorRole = access.users[user.uid].role || "default";
+    if (actorRole !== "owner" && actorRole !== "admin") return;
     if (targetUid === access.ownerUid) return;
-    if (!confirm("Remove this user from the app? They will need a new invite to return.")) return;
+    var row = access.users[targetUid];
+    if (!row) return;
+    if (actorRole === "admin") {
+      var tr = row.role || "default";
+      if (tr === "owner" || tr === "admin") {
+        flash("Only an owner can remove admins or owners.");
+        return;
+      }
+    }
+    if (!confirm("Remove this user from the app? They can be added again by email if needed.")) return;
+    var who = row ? normalizeEmail(row.email) || row.displayName || targetUid : targetUid;
+    updateDoc(accessRef(), new FieldPath("users", targetUid), deleteField())
+      .then(function () {
+        appendEventLogEntry("Access removed — " + who, user.email).catch(function () {});
+      })
+      .catch(function (e) {
+        flash(e.message || "Could not remove user.");
+      });
+  }
+  function acceptAccessRequest(requestId) {
+    if (!user || !access || !access.users || !access.users[user.uid]) return;
+    var myR = access.users[user.uid].role || "default";
+    if (myR !== "owner" && myR !== "admin") return;
+    var req = access.accessRequests && access.accessRequests[requestId];
+    if (!req || !req.uid) return;
+    var em = normalizeEmail(req.email);
+    var now = new Date().toISOString();
+    var userRow = {
+      email: em,
+      displayName: req.displayName || "",
+      photoURL: req.photoURL || "",
+      role: "default",
+      updatedAt: now,
+    };
+    var sk = emailSlotKey(em);
+    var slotExists = access.users && access.users[sk] && access.users[sk].pending;
+    var p = accessRef();
+    var reqPromise = slotExists
+      ? updateDoc(
+          p,
+          new FieldPath("users", req.uid),
+          userRow,
+          new FieldPath("accessRequests", requestId),
+          deleteField(),
+          new FieldPath("users", sk),
+          deleteField()
+        )
+      : updateDoc(p, new FieldPath("users", req.uid), userRow, new FieldPath("accessRequests", requestId), deleteField());
+    reqPromise
+      .then(function () {
+        flash("Access granted.");
+        appendEventLogEntry("Access approved — " + em + " (Default role)", user.email).catch(function () {});
+      })
+      .catch(function (e) {
+        flash(e.message || "Could not approve.");
+      });
+  }
+  function denyAccessRequest(requestId) {
+    if (!user || !access || !access.users || !access.users[user.uid]) return;
+    var myR = access.users[user.uid].role || "default";
+    if (myR !== "owner" && myR !== "admin") return;
+    var req = access.accessRequests && access.accessRequests[requestId];
+    if (!req) return;
+    var em = normalizeEmail(req.email);
     var patch = {};
-    patch["users." + targetUid] = deleteField();
-    updateDoc(accessRef(), patch).catch(function (e) {
-      flash(e.message || "Could not remove user.");
+    patch["accessRequests." + requestId] = deleteField();
+    updateDoc(accessRef(), patch)
+      .then(function () {
+        flash("Request denied.");
+        appendEventLogEntry("Access denied — " + em, user.email).catch(function () {});
+      })
+      .catch(function (e) {
+        flash(e.message || "Could not deny.");
+      });
+  }
+
+  function exportActivityLogTxt() {
+    var ev = Array.isArray(data.eventLog) ? data.eventLog : [];
+    var filtered = ev.filter(function (e) {
+      return eventLogEntryMatchesFilters(selM, activityLogRange, e);
     });
+    var scopeLabel = isRegion(selM) ? "All Offices" : data.markets[selM] ? data.markets[selM].name : String(selM || "");
+    var rangeLabel =
+      activityLogRange === "day"
+        ? "Last 24 hours"
+        : activityLogRange === "week"
+          ? "Last 7 days"
+          : activityLogRange === "month"
+            ? "Last 30 days"
+            : "All time";
+    var header =
+      "Activity log export\n" +
+      "Exported: " +
+      new Date().toISOString() +
+      "\nOffice / market: " +
+      scopeLabel +
+      "\nTime range: " +
+      rangeLabel +
+      "\nEntries: " +
+      filtered.length +
+      "\n\n";
+    var body =
+      filtered.length === 0
+        ? "(No entries for the selected office and time range.)"
+        : filtered
+            .map(function (e) {
+              var when =
+                e && e.ts
+                  ? new Date(e.ts).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })
+                  : "—";
+              var actor = e && e.actor ? e.actor : "";
+              var msg = e && e.message ? e.message : "";
+              return when + (actor ? " · " + actor : "") + "\n" + msg;
+            })
+            .join("\n\n");
+    var blob = new Blob([header + body], { type: "text/plain;charset=utf-8" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "activity-log-" + activityLogRange + "-" + TODAY + ".txt";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
   }
 
   var mIds = Object.keys(data.markets).sort(function (a, b) {
@@ -2006,6 +2440,13 @@ export default function App() {
     var nb = data.markets[b] && data.markets[b].name ? data.markets[b].name : "";
     return na.localeCompare(nb);
   });
+  var selMResolved = selM == null ? REGION_KEY : selM;
+  var officeScopeTitle =
+    selMResolved === REGION_KEY
+      ? "All Offices"
+      : data.markets[selMResolved] && data.markets[selMResolved].name
+        ? data.markets[selMResolved].name
+        : selMResolved;
   var curReps = !selM
     ? []
     : isRegion(selM)
@@ -2041,13 +2482,13 @@ export default function App() {
     selM && !isRegion(selM)
       ? (data.markets[selM] ? data.markets[selM].name + " · " : "") + "Closers included when knocking · "
       : selM && isRegion(selM)
-        ? "Region — all offices · Closers included when knocking · "
+        ? "All Offices · Closers included when knocking · "
         : "";
   var closerBoardSub =
     selM && !isRegion(selM)
       ? (data.markets[selM] ? data.markets[selM].name : "") + " · "
       : selM && isRegion(selM)
-        ? "Region — all offices · "
+        ? "All Offices · "
         : "";
 
   var knockerLB = [];
@@ -2262,19 +2703,6 @@ export default function App() {
       : 0;
   var profRevEst = profileRep && profileRep.role === "closer" ? Math.round(profMonthCloses * profDeal) : 0;
 
-  var TABS = [
-    { k: "dashboard", l: "Dashboard" },
-    { k: "enter", l: "Enter" },
-    { k: "knockerboard", l: "Knockers" },
-    { k: "closerboard", l: "Closers" },
-    { k: "trends", l: "Trends" },
-    { k: "accountability", l: "Log" },
-    { k: "rollup", l: "Markets" },
-    { k: "challenge", l: "Challenge" },
-    { k: "report", l: "Report" },
-    { k: "manage", l: "Manage" },
-  ];
-
   var showRange = tab !== "enter" && tab !== "manage" && tab !== "accountability" && tab !== "report";
 
   function renderFlagCard(item) {
@@ -2429,51 +2857,302 @@ export default function App() {
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
       <style>
         {
-          ":root,body,*{font-family:'DM Sans',-apple-system,sans-serif}input,select,textarea,button{font-family:inherit}@media print{.weekly-report-print *{box-shadow:none!important}.no-print{display:none!important}.weekly-report-print{padding:16px}}"
+          ":root,body,*{font-family:'DM Sans',-apple-system,sans-serif}input,select,textarea,button{font-family:inherit}@media (max-width:768px){.header-shell{grid-template-columns:minmax(0,1fr) auto!important}.header-brand-block{display:none!important}}@media print{.weekly-report-print *{box-shadow:none!important}.no-print{display:none!important}.weekly-report-print{padding:16px}}"
         }
       </style>
 
       <div
-        className="no-print"
+        className="no-print header-shell"
         style={{
           background: "#fff",
           padding: "14px 18px",
-          display: "flex",
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1fr) auto minmax(0, 1fr)",
           alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-          gap: 8,
+          columnGap: 12,
+          rowGap: 10,
           borderBottom: "1px solid #E5E5EA",
           position: "sticky",
           top: 0,
           zIndex: 100,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#FF3B30" }} />
-          <span style={{ fontWeight: 800, fontSize: 16, color: "#1C1C1E" }}>Command Center</span>
+        <div className="header-brand-block" style={{ display: "flex", alignItems: "center", gap: 8, justifySelf: "start", minWidth: 0 }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#FF3B30", flexShrink: 0 }} />
+          <span style={{ fontWeight: 800, fontSize: 20, color: "#1C1C1E", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Jake's Region</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <select
-            value={selM || REGION_KEY}
-            onChange={function (e) {
-              setSelM(e.target.value);
+        <div ref={officePickerRef} style={{ position: "relative", justifySelf: "center", maxWidth: "min(420px, calc(100vw - 48px))", minWidth: 0 }}>
+          <button
+            type="button"
+            aria-haspopup="listbox"
+            aria-expanded={officePickerOpen}
+            aria-label={officeScopeTitle + ". Change office or region."}
+            onClick={function () {
+              setOfficePickerOpen(!officePickerOpen);
+              setProfileMenuOpen(false);
+              setAccessNotifOpen(false);
             }}
-            style={{ fontSize: 14, fontWeight: 600, padding: "8px 14px", background: "#F2F2F7", color: "#1C1C1E", border: "none", borderRadius: 10 }}
+            style={{
+              width: "100%",
+              border: "none",
+              borderRadius: 12,
+              background: "transparent",
+              padding: "6px 12px",
+              cursor: "pointer",
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 10,
+              textAlign: "center",
+            }}
           >
-            <option value={REGION_KEY}>All Offices</option>
-            {mIds.map(function (id) {
-              return (
-                <option key={id} value={id}>
-                  {data.markets[id].name}
-                </option>
-              );
-            })}
-          </select>
+            <span
+              style={{
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                minWidth: 0,
+                fontSize: 24,
+                fontWeight: 800,
+                color: "#1C1C1E",
+                lineHeight: 1.15,
+              }}
+            >
+              {officeScopeTitle}
+            </span>
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 11 11"
+              aria-hidden
+              style={{
+                flexShrink: 0,
+                transform: officePickerOpen ? "rotate(180deg)" : "none",
+                transition: "transform 0.2s ease",
+                opacity: 0.45,
+              }}
+            >
+              <path d="M2.5 3.5L5.5 6.5L8.5 3.5" fill="none" stroke="#3A3A3C" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          {officePickerOpen ? (
+            <div
+              role="listbox"
+              aria-label="Choose office or region"
+              style={{
+                position: "absolute",
+                left: "50%",
+                transform: "translateX(-50%)",
+                top: "calc(100% + 8px)",
+                width: 300,
+                maxWidth: "calc(100vw - 24px)",
+                background: "#fff",
+                borderRadius: 14,
+                border: "1px solid #E5E5EA",
+                boxShadow: shL,
+                padding: "8px 0",
+                zIndex: 220,
+              }}
+            >
+              <button
+                type="button"
+                role="option"
+                aria-selected={selMResolved === REGION_KEY}
+                onClick={function () {
+                  setSelM(REGION_KEY);
+                  setOfficePickerOpen(false);
+                }}
+                style={{
+                  width: "100%",
+                  border: "none",
+                  background: selMResolved === REGION_KEY ? "#F2F2F7" : "transparent",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  padding: "10px 14px",
+                  fontSize: 14,
+                  fontWeight: selMResolved === REGION_KEY ? 700 : 500,
+                  color: "#1C1C1E",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 8,
+                }}
+              >
+                <span>All Offices</span>
+                {selMResolved === REGION_KEY ? (
+                  <span style={{ fontSize: 12, color: "#007AFF", fontWeight: 700 }}>✓</span>
+                ) : null}
+              </button>
+              <div
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
+                  color: "#8E8E93",
+                  textTransform: "uppercase",
+                  padding: "10px 14px 4px",
+                  marginTop: 4,
+                  borderTop: "1px solid #F2F2F7",
+                }}
+              >
+                Offices
+              </div>
+              <div style={{ maxHeight: "min(40vh, 280px)", overflowY: "auto" }}>
+                {mIds.map(function (id) {
+                  var sel = selMResolved === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      role="option"
+                      aria-selected={sel}
+                      onClick={function () {
+                        setSelM(id);
+                        setOfficePickerOpen(false);
+                      }}
+                      style={{
+                        width: "100%",
+                        border: "none",
+                        background: sel ? "#F2F2F7" : "transparent",
+                        cursor: "pointer",
+                        textAlign: "left",
+                        padding: "10px 14px",
+                        fontSize: 14,
+                        fontWeight: sel ? 700 : 500,
+                        color: "#1C1C1E",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 8,
+                      }}
+                    >
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{data.markets[id].name}</span>
+                      {sel ? <span style={{ fontSize: 12, color: "#007AFF", fontWeight: 700, flexShrink: 0 }}>✓</span> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, justifySelf: "end" }}>
+          {showInviteUi ? (
+            <div ref={accessNotifRef} style={{ position: "relative" }}>
+              <button
+                type="button"
+                aria-label="Access requests"
+                aria-expanded={accessNotifOpen}
+                title="Access requests"
+                onClick={function (e) {
+                  e.stopPropagation();
+                  setAccessNotifOpen(!accessNotifOpen);
+                  setProfileMenuOpen(false);
+                  setOfficePickerOpen(false);
+                }}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  cursor: "pointer",
+                  padding: 4,
+                  margin: 0,
+                  lineHeight: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: 0.8,
+                }}
+              >
+                <img
+                  src={notifPng}
+                  alt=""
+                  width={22}
+                  height={22}
+                  style={{ display: "block", objectFit: "contain" }}
+                />
+              </button>
+              {pendingAccessRequests.length > 0 ? (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: 3,
+                    right: 3,
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    background: "#FF3B30",
+                    border: "1px solid #FAFAFA",
+                    pointerEvents: "none",
+                  }}
+                />
+              ) : null}
+              {accessNotifOpen ? (
+                <div
+                  style={{
+                    position: "absolute",
+                    right: 0,
+                    top: "calc(100% + 8px)",
+                    width: 320,
+                    maxWidth: "calc(100vw - 36px)",
+                    background: "#fff",
+                    borderRadius: 12,
+                    border: "1px solid #E5E5EA",
+                    boxShadow: shL,
+                    padding: 12,
+                    zIndex: 200,
+                  }}
+                >
+                  <div style={{ fontWeight: 700, fontSize: 12, color: "#8E8E93", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>
+                    Access requests
+                  </div>
+                  {pendingAccessRequests.length === 0 ? (
+                    <p style={{ margin: 0, fontSize: 13, color: "#8E8E93", fontWeight: 500 }}>No pending requests.</p>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {pendingAccessRequests.map(function (pr, pri) {
+                        return (
+                          <div
+                            key={pr.id}
+                            style={{
+                              padding: "10px 0",
+                              borderBottom: pri < pendingAccessRequests.length - 1 ? "1px solid #F2F2F7" : "none",
+                            }}
+                          >
+                            <div style={{ fontSize: 12, fontWeight: 600, color: "#1C1C1E", marginBottom: 8, wordBreak: "break-all" }}>{pr.email}</div>
+                            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                              <Btn
+                                style={{ fontSize: 11, padding: "5px 12px" }}
+                                onClick={function () {
+                                  acceptAccessRequest(pr.id);
+                                }}
+                              >
+                                Accept
+                              </Btn>
+                              <Btn
+                                v="secondary"
+                                style={{ fontSize: 11, padding: "5px 12px", color: "#FF3B30" }}
+                                onClick={function () {
+                                  denyAccessRequest(pr.id);
+                                }}
+                              >
+                                Deny
+                              </Btn>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           <div ref={profileMenuRef} style={{ position: "relative" }}>
             <button
               type="button"
               onClick={function () {
+                setAccessNotifOpen(false);
+                setOfficePickerOpen(false);
                 setProfileMenuOpen(!profileMenuOpen);
               }}
               style={{
@@ -2552,9 +3231,9 @@ export default function App() {
                 </div>
                 {showInviteUi ? (
                   <div style={{ borderTop: "1px solid #F2F2F7", paddingTop: 12, marginBottom: 12 }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: "#8E8E93", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Invite</div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: "#8E8E93", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Add user</div>
                     <div style={{ fontSize: 11, color: "#8E8E93", marginBottom: 8, lineHeight: 1.4 }}>
-                      Invitees must sign in with Google using the email you enter. Owners may invite other owners; admins can invite at admin level or below.
+                      They show up under Manage users immediately. First Google sign-in with that email attaches their account (no extra step for you). Owners may add other owners; admins can add at admin level or below.
                     </div>
                     <input
                       type="email"
@@ -2594,49 +3273,15 @@ export default function App() {
                     </select>
                     <Btn
                       onClick={function () {
-                        createAccessInvite();
+                        addPendingAccessByEmail();
                       }}
                       style={{ width: "100%", padding: "8px 12px", borderRadius: 10, fontSize: 12 }}
                     >
-                      Create invite link
+                      Add User
                     </Btn>
-                    {inviteLinkOut ? (
-                      <div style={{ marginTop: 10 }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: "#8E8E93", marginBottom: 4 }}>Link</div>
-                        <div
-                          style={{
-                            fontSize: 11,
-                            wordBreak: "break-all",
-                            color: "#3A3A3C",
-                            background: "#F2F2F7",
-                            padding: 8,
-                            borderRadius: 8,
-                            marginBottom: 8,
-                          }}
-                        >
-                          {inviteLinkOut}
-                        </div>
-                        <Btn
-                          v="secondary"
-                          style={{ width: "100%", fontSize: 12, padding: "6px 10px" }}
-                          onClick={function () {
-                            navigator.clipboard.writeText(inviteLinkOut).then(
-                              function () {
-                                flash("Copied to clipboard");
-                              },
-                              function () {
-                                flash("Could not copy");
-                              }
-                            );
-                          }}
-                        >
-                          Copy link
-                        </Btn>
-                      </div>
-                    ) : null}
                   </div>
                 ) : null}
-                {isOwnerUi ? (
+                {showInviteUi ? (
                   <div style={{ borderTop: "1px solid #F2F2F7", paddingTop: 12, marginBottom: 12 }}>
                     <Btn
                       v="secondary"
@@ -2699,7 +3344,7 @@ export default function App() {
           >
             <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 4, color: "#1C1C1E" }}>People with access</div>
             <p style={{ fontSize: 12, color: "#8E8E93", margin: "0 0 8px 0", lineHeight: 1.4 }}>
-              Demote admins to default, or remove users (the owner cannot be removed).
+              Change roles (within your permission) or remove people.
             </p>
             <div style={{ marginBottom: 14 }}>
               {Object.entries(access.users || {})
@@ -2717,7 +3362,12 @@ export default function App() {
                 .map(function (item) {
                   var uid = item.uid;
                   var row = item.row;
-                  var isOwnerRow = uid === access.ownerUid || row.role === "owner";
+                  var isPrimaryOwnerRow = uid === access.ownerUid;
+                  var roleOpts = roleOptionsForRow(myRole, uid, row);
+                  var curRole = row.role || "default";
+                  var canRemoveRow =
+                    !isPrimaryOwnerRow &&
+                    (myRole === "owner" || (myRole === "admin" && curRole !== "owner" && curRole !== "admin"));
                   return (
                     <div
                       key={uid}
@@ -2754,24 +3404,43 @@ export default function App() {
                         <div style={{ fontWeight: 700, fontSize: 14, color: "#1C1C1E" }}>{row.displayName || row.email || uid}</div>
                         <div style={{ fontSize: 11, color: "#8E8E93", fontWeight: 600 }}>{row.email || ""}</div>
                       </div>
-                      <Badge
-                        text={roleLabel(row.role || "default")}
-                        color={row.role === "owner" ? "#5856D6" : row.role === "admin" ? "#007AFF" : "#8E8E93"}
-                        bg={row.role === "owner" ? "#EEF0FF" : row.role === "admin" ? "#E8F4FF" : "#F2F2F7"}
-                      />
-                      {!isOwnerRow ? (
+                      {roleOpts.length > 0 ? (
+                        <select
+                          aria-label={"Role for " + (row.email || uid)}
+                          value={curRole}
+                          onChange={function (e) {
+                            setAccessUserRole(uid, e.target.value);
+                          }}
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 600,
+                            padding: "6px 10px",
+                            borderRadius: 8,
+                            border: "1px solid #E5E5EA",
+                            background: "#fff",
+                            color: "#1C1C1E",
+                            minWidth: 0,
+                          }}
+                        >
+                          {roleOpts.map(function (r) {
+                            return (
+                              <option key={r} value={r}>
+                                {roleLabel(r)}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      ) : (
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                          <Badge
+                            text={roleLabel(curRole)}
+                            color={row.role === "owner" ? "#5856D6" : row.role === "admin" ? "#007AFF" : "#8E8E93"}
+                            bg={row.role === "owner" ? "#EEF0FF" : row.role === "admin" ? "#E8F4FF" : "#F2F2F7"}
+                          />
+                        </div>
+                      )}
+                      {canRemoveRow ? (
                         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                          {row.role === "admin" ? (
-                            <Btn
-                              v="secondary"
-                              style={{ fontSize: 11, padding: "4px 10px" }}
-                              onClick={function () {
-                                demoteAccessUser(uid);
-                              }}
-                            >
-                              Demote
-                            </Btn>
-                          ) : null}
                           <Btn
                             v="secondary"
                             style={{ fontSize: 11, padding: "4px 10px", color: "#FF3B30" }}
@@ -2801,7 +3470,7 @@ export default function App() {
 
       <div style={{ maxWidth: 1000, margin: "0 auto", padding: "12px" }}>
         <div className="no-print" style={{ display: "flex", gap: 4, marginBottom: 14, overflowX: "auto", WebkitOverflowScrolling: "touch", padding: "4px 0" }}>
-          {TABS.map(function (t) {
+          {MAIN_TABS.map(function (t) {
             return (
               <button
                 key={t.k}
@@ -2833,6 +3502,7 @@ export default function App() {
           </div>
         ) : null}
 
+        <div onTouchStart={onSwipeTabTouchStart} onTouchEnd={onSwipeTabTouchEnd}>
         {tab === "dashboard" &&
           (!selM ? (
             <Card>
@@ -2841,7 +3511,7 @@ export default function App() {
           ) : (
             <div>
               <h2 style={{ fontSize: 22, fontWeight: 800, color: "#1C1C1E", margin: "0 0 14px 0" }}>
-                {isRegion(selM) ? "Region — all offices" : data.markets[selM] && data.markets[selM].name}
+                {isRegion(selM) ? "All Offices" : data.markets[selM] && data.markets[selM].name}
               </h2>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
                 <StatCard label="Total" value={curReps.length} />
@@ -4062,50 +4732,100 @@ export default function App() {
               </Card>
             ) : null}
             <Card style={{ marginTop: 14 }}>
-              <button
-                type="button"
-                onClick={function () {
-                  setEventLogOpen(!eventLogOpen);
-                }}
+              <div
                 style={{
-                  width: "100%",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  gap: 12,
-                  background: "none",
-                  border: "none",
-                  padding: 0,
-                  cursor: "pointer",
-                  textAlign: "left",
+                  gap: 10,
+                  flexWrap: "wrap",
                 }}
               >
                 <span style={{ fontWeight: 800, fontSize: 15, color: "#1C1C1E" }}>Activity log</span>
-                <span style={{ fontSize: 12, color: "#8E8E93", fontWeight: 700 }}>{eventLogOpen ? "Hide" : "Show"}</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={function () {
+                    setEventLogOpen(!eventLogOpen);
+                  }}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: "6px 0",
+                    cursor: "pointer",
+                    fontSize: 12,
+                    color: "#8E8E93",
+                    fontWeight: 700,
+                  }}
+                >
+                  {eventLogOpen ? "Hide" : "Show"}
+                </button>
+              </div>
               <p style={{ fontSize: 12, color: "#8E8E93", margin: "6px 0 0 0", lineHeight: 1.45 }}>
-                Recent saves (KPIs, markets, reps, accountability, settings), stored with your data.
+                Open the log to choose a time range and export. Filters use the header office plus the range below; export matches the list.
                 {isRegion(selM)
-                  ? " With All Offices selected, you see every entry."
+                  ? " All Offices includes company-wide and access events."
                   : data.markets[selM]
-                    ? " With one office selected, only events for " + data.markets[selM].name + " appear (company-wide settings show only when All Offices is selected)."
+                    ? " Only events tagged for " + data.markets[selM].name + " appear; choose All Offices for company-wide and access activity."
                     : ""}
               </p>
               {eventLogOpen ? (
-                <div
-                  style={{
-                    marginTop: 14,
-                    maxHeight: 360,
-                    overflowY: "auto",
-                    borderRadius: 10,
-                    border: "1px solid #E5E5EA",
-                    background: "#FAFAFA",
-                  }}
-                >
+                <div style={{ marginTop: 14 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "flex-start",
+                      gap: 8,
+                      flexWrap: "wrap",
+                      marginBottom: 10,
+                    }}
+                  >
+                    <select
+                      aria-label="Activity log time range"
+                      value={activityLogRange}
+                      onChange={function (e) {
+                        setActivityLogRange(e.target.value);
+                      }}
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        padding: "6px 10px",
+                        borderRadius: 8,
+                        border: "1px solid #E5E5EA",
+                        background: "#fff",
+                        color: "#1C1C1E",
+                        maxWidth: "100%",
+                      }}
+                    >
+                      <option value="day">Last 24 hours</option>
+                      <option value="week">Last 7 days</option>
+                      <option value="month">Last 30 days</option>
+                      <option value="all">All time</option>
+                    </select>
+                    <Btn
+                      v="secondary"
+                      onClick={function (e) {
+                        e.stopPropagation();
+                        exportActivityLogTxt();
+                      }}
+                      style={{ fontSize: 12, padding: "6px 12px", borderRadius: 8 }}
+                    >
+                      Export .txt
+                    </Btn>
+                  </div>
+                  <div
+                    style={{
+                      maxHeight: 360,
+                      overflowY: "auto",
+                      borderRadius: 10,
+                      border: "1px solid #E5E5EA",
+                      background: "#FAFAFA",
+                    }}
+                  >
                   {function () {
                     var ev = Array.isArray(data.eventLog) ? data.eventLog : [];
                     var filtered = ev.filter(function (e) {
-                      return eventLogMatchesSelection(selM, e);
+                      return eventLogEntryMatchesFilters(selM, activityLogRange, e);
                     });
                     if (ev.length === 0) {
                       return <p style={{ margin: 0, padding: 16, color: "#8E8E93", fontSize: 13, textAlign: "center" }}>No activity recorded yet.</p>;
@@ -4113,7 +4833,7 @@ export default function App() {
                     if (filtered.length === 0) {
                       return (
                         <p style={{ margin: 0, padding: 16, color: "#8E8E93", fontSize: 13, textAlign: "center" }}>
-                          No activity for this office. Choose All Offices in the header to see every entry, or switch office.
+                          No entries for this office and time range. Try All Offices, a wider range, or All time.
                         </p>
                       );
                     }
@@ -4143,11 +4863,13 @@ export default function App() {
                     </ul>
                     );
                   }()}
+                  </div>
                 </div>
               ) : null}
             </Card>
           </div>
         )}
+        </div>
       </div>
 
       {tab === "enter" && selM && !isRegion(selM) && curReps.length > 0 ? (
