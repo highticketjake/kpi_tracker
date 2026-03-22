@@ -1349,6 +1349,7 @@ export default function App() {
   var profileMenuRef = useRef(null);
   var accessNotifRef = useRef(null);
   var officePickerRef = useRef(null);
+  var tabStripScrollRef = useRef(null);
   var claimStartedRef = useRef(false);
   var swipeTabTouchRef = useRef({ x: 0, y: 0, ignore: false, axisLock: null, tracking: false });
 
@@ -1424,6 +1425,17 @@ export default function App() {
     swipeTabTouchRef.current.ignore = false;
     swipeTabTouchRef.current.axisLock = null;
   }, []);
+
+  useEffect(
+    function () {
+      var strip = tabStripScrollRef.current;
+      if (!strip) return;
+      var btn = strip.querySelector('[data-tab-key="' + tab + '"]');
+      if (!btn || typeof btn.scrollIntoView !== "function") return;
+      btn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    },
+    [tab]
+  );
 
   useEffect(function () {
     var unsub = onAuthStateChanged(auth, function (u) {
@@ -3522,6 +3534,7 @@ export default function App() {
           style={{ minHeight: "calc(100vh - 88px)" }}
         >
         <div
+          ref={tabStripScrollRef}
           className="no-print"
           onTouchStart={function (e) {
             e.stopPropagation();
@@ -3535,16 +3548,29 @@ export default function App() {
           onTouchCancel={function (e) {
             e.stopPropagation();
           }}
-          style={{ display: "flex", gap: 4, marginBottom: 14, overflowX: "auto", WebkitOverflowScrolling: "touch", padding: "4px 0" }}
+          style={{
+            display: "flex",
+            gap: 4,
+            marginBottom: 14,
+            overflowX: "auto",
+            WebkitOverflowScrolling: "touch",
+            padding: "4px 0",
+            scrollSnapType: "x proximity",
+            scrollPaddingInline: 12,
+          }}
         >
           {MAIN_TABS.map(function (t) {
             return (
               <button
                 key={t.k}
+                type="button"
+                data-tab-key={t.k}
                 onClick={function () {
                   setTab(t.k);
                 }}
                 style={{
+                  scrollSnapAlign: "center",
+                  flexShrink: 0,
                   padding: "8px 14px",
                   fontSize: 13,
                   fontWeight: tab === t.k ? 700 : 500,
