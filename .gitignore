@@ -57,3 +57,6 @@ ui-debug.log
 
 ### Netlify local tooling
 .netlify/
+
+### Claude Code local launch config
+.claude/
