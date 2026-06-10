@@ -1,12 +1,108 @@
-import { memo, useEffect, useState, useCallback } from "react";
+import { memo, useEffect, useState, useCallback, useRef } from "react";
 import TVAutoScroll from "./TVAutoScroll.jsx";
 import TVYouTubeAmbient from "./TVYouTubeAmbient.jsx";
+
+function TVRangePicker(p) {
+  var _open = useState(false),
+    open = _open[0],
+    setOpen = _open[1];
+  var wrapRef = useRef(null);
+
+  useEffect(
+    function () {
+      if (!open) return;
+      function onDoc(e) {
+        if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+      }
+      function onKey(e) {
+        if (e.key === "Escape") setOpen(false);
+      }
+      document.addEventListener("mousedown", onDoc);
+      document.addEventListener("keydown", onKey);
+      return function () {
+        document.removeEventListener("mousedown", onDoc);
+        document.removeEventListener("keydown", onKey);
+      };
+    },
+    [open]
+  );
+
+  function pick(opt) {
+    p.onPeriodPick(opt);
+    setOpen(false);
+  }
+
+  var month = p.period === "month";
+  var options = month ? p.monthPickerOptions || [] : p.weekPickerOptions || [];
+  var listLabel = month ? "Select month" : "Select week";
+
+  useEffect(
+    function () {
+      setOpen(false);
+    },
+    [p.period]
+  );
+
+  return (
+    <p className="mt-1 font-tv text-sm text-slate-500">
+      {p.rangePrefix} ·{" "}
+      <span ref={wrapRef} className="relative inline">
+        <button
+          type="button"
+          className="m-0 cursor-pointer border-0 bg-transparent p-0 font-tv text-sm text-slate-500 focus:outline-none focus-visible:underline"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-label={"Change period: " + p.rangeDetail}
+          onClick={function (e) {
+            e.stopPropagation();
+            setOpen(function (v) {
+              return !v;
+            });
+          }}
+        >
+          {p.rangeDetail}
+        </button>
+        {open ? (
+          <ul
+            role="listbox"
+            aria-label={listLabel}
+            className="pointer-events-auto absolute left-0 top-full z-[10100] mt-1 max-h-56 min-w-[12rem] overflow-y-auto rounded-lg border border-white/20 bg-slate-950 py-1 shadow-2xl [scrollbar-width:thin]"
+            onClick={function (e) {
+              e.stopPropagation();
+            }}
+          >
+            {options.map(function (opt) {
+              var sel = opt.key === p.selectedPeriodKey;
+              return (
+                <li key={opt.key} role="option" aria-selected={sel}>
+                  <button
+                    type="button"
+                    className={
+                      "pointer-events-auto w-full px-3 py-2 text-left font-tv text-sm text-slate-300 hover:bg-white/10 " +
+                      (sel ? "bg-white/10 font-semibold text-white" : "")
+                    }
+                    onClick={function (e) {
+                      e.stopPropagation();
+                      pick(opt);
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+      </span>
+    </p>
+  );
+}
 
 function Header(p) {
   var dupOffice = p.marketName.trim().toLowerCase() === p.officeName.trim().toLowerCase();
   return (
-    <header className="relative z-10 flex flex-shrink-0 flex-col gap-4 border-b border-white/[0.08] bg-black/30 px-5 py-4 backdrop-blur-md sm:flex-row sm:items-center sm:justify-between sm:gap-6">
-      <div className="min-w-0 flex-1">
+    <header className="relative z-30 flex flex-shrink-0 flex-col gap-4 overflow-visible border-b border-white/[0.08] bg-black/30 px-5 py-4 backdrop-blur-md sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+      <div className="relative min-w-0 flex-1 overflow-visible">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <span className="font-display text-4xl leading-none tracking-wide text-white sm:text-5xl">{p.marketName}</span>
           <span className="rounded-md bg-emerald-500/15 px-2 py-0.5 font-tv text-xs font-bold uppercase tracking-widest text-emerald-300/90">
@@ -14,7 +110,49 @@ function Header(p) {
           </span>
         </div>
         {!dupOffice ? <p className="mt-1 truncate font-tv text-lg font-semibold text-slate-400">{p.officeName}</p> : null}
-        <p className="mt-1 font-tv text-sm text-slate-500">{p.rangeLabel}</p>
+        <TVRangePicker
+          rangePrefix={p.rangePrefix}
+          rangeDetail={p.rangeDetail}
+          period={p.period}
+          selectedPeriodKey={p.selectedPeriodKey}
+          weekPickerOptions={p.weekPickerOptions}
+          monthPickerOptions={p.monthPickerOptions}
+          onPeriodPick={p.onPeriodPick}
+        />
+        <div
+          className="mt-2 flex w-fit rounded-xl border border-white/10 bg-black/40 p-1 shadow-inner"
+          role="group"
+          aria-label="Data period: week or month"
+        >
+          <button
+            type="button"
+            className={
+              "rounded-lg px-4 py-2 font-tv text-sm font-bold transition-colors " +
+              (p.period === "week" ? "bg-white text-slate-900 shadow-md" : "text-slate-400 hover:text-white")
+            }
+            onClick={p.onSelectWeek}
+            onDoubleClick={function (e) {
+              e.preventDefault();
+              p.onResetToPresentWeek();
+            }}
+          >
+            Week
+          </button>
+          <button
+            type="button"
+            className={
+              "rounded-lg px-4 py-2 font-tv text-sm font-bold transition-colors " +
+              (p.period === "month" ? "bg-white text-slate-900 shadow-md" : "text-slate-400 hover:text-white")
+            }
+            onClick={p.onSelectMonth}
+            onDoubleClick={function (e) {
+              e.preventDefault();
+              p.onResetToPresentMonth();
+            }}
+          >
+            Month
+          </button>
+        </div>
       </div>
       <div className="flex flex-wrap items-center justify-end gap-3 sm:gap-4">
         <div
@@ -64,6 +202,11 @@ function MVPBanner(p) {
   var m = p.mvp;
   var k = m && m.knocker;
   var c = m && m.closer;
+  var month = p.period === "month";
+  var past = p.rangePrefix === "Past week" || p.rangePrefix === "Past month";
+  var mvpLabel = month ? "Monthly MVP" : "Weekly MVP";
+  var setsLabel = month ? (past ? "sets" : "sets this month") : past ? "sets" : "sets this week";
+  var closesLabel = month ? (past ? "closed" : "closed this month") : past ? "closed" : "closed this week";
   return (
     <div className="relative z-10 mx-5 mt-4 flex-shrink-0 motion-safe:animate-tv-float motion-reduce:animate-none" style={{ animationDelay: "0.1s" }}>
       <div className="relative overflow-hidden rounded-2xl border border-amber-400/40 bg-gradient-to-r from-amber-950/80 via-[#1a1408] to-amber-950/80 shadow-[0_0_60px_-12px_rgba(251,191,36,0.35)]">
@@ -71,12 +214,12 @@ function MVPBanner(p) {
         <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-amber-400/10 blur-2xl" />
         <div className="relative grid grid-cols-1 gap-px bg-amber-500/20 md:grid-cols-2">
           <div className="bg-black/20 px-6 py-5 text-center md:text-left">
-            <p className="font-tv text-[10px] font-bold uppercase tracking-[0.35em] text-amber-200/80">Weekly MVP · Knocker</p>
+            <p className="font-tv text-[10px] font-bold uppercase tracking-[0.35em] text-amber-200/80">{mvpLabel} · Knocker</p>
             {k && k.rid ? (
               <>
                 <p className="mt-2 font-display text-5xl leading-none tracking-wide text-white md:text-6xl">{k.name}</p>
                 <p className="mt-2 font-display text-4xl text-emerald-400">{k.sets}</p>
-                <p className="font-tv text-sm font-semibold uppercase tracking-wide text-slate-500">sets this week</p>
+                <p className="font-tv text-sm font-semibold uppercase tracking-wide text-slate-500">{setsLabel}</p>
                 {k.market ? <p className="mt-1 font-tv text-sm text-slate-500">{k.market}</p> : null}
               </>
             ) : (
@@ -84,12 +227,12 @@ function MVPBanner(p) {
             )}
           </div>
           <div className="bg-black/20 px-6 py-5 text-center md:border-l md:border-amber-500/20 md:text-left">
-            <p className="font-tv text-[10px] font-bold uppercase tracking-[0.35em] text-amber-200/80">Weekly MVP · Closer</p>
+            <p className="font-tv text-[10px] font-bold uppercase tracking-[0.35em] text-amber-200/80">{mvpLabel} · Closer</p>
             {c && c.rid ? (
               <>
                 <p className="mt-2 font-display text-5xl leading-none tracking-wide text-white md:text-6xl">{c.name}</p>
                 <p className="mt-2 font-display text-4xl text-emerald-400">{c.closes}</p>
-                <p className="font-tv text-sm font-semibold uppercase tracking-wide text-slate-500">closed this week</p>
+                <p className="font-tv text-sm font-semibold uppercase tracking-wide text-slate-500">{closesLabel}</p>
                 {c.market ? <p className="mt-1 font-tv text-sm text-slate-500">{c.market}</p> : null}
               </>
             ) : (
@@ -104,6 +247,10 @@ function MVPBanner(p) {
 
 function TVMarketCard(p) {
   var card = p.card;
+  var periodTag = (p.rangePrefix || "This week") + " · market";
+  function fmtRevenueTv(n) {
+    return "$" + (n || 0).toLocaleString();
+  }
   if (!card || !card.st) {
     return (
       <div className="rounded-2xl border border-white/[0.07] bg-black/25 p-4 font-tv text-slate-500 backdrop-blur-sm motion-safe:animate-tv-float motion-reduce:animate-none">
@@ -117,8 +264,12 @@ function TVMarketCard(p) {
       className="flex min-h-0 flex-shrink-0 flex-col rounded-2xl border border-emerald-500/25 bg-black/30 p-4 shadow-lg backdrop-blur-sm motion-safe:animate-tv-float motion-reduce:animate-none"
       style={{ animationDelay: "0.2s" }}
     >
-      <p className="font-tv text-[10px] font-bold uppercase tracking-[0.3em] text-emerald-300/80">This week · market</p>
-      <p className="mt-1 font-display text-3xl tracking-wide text-white md:text-4xl">{card.title}</p>
+      <p className="font-tv text-[10px] font-bold uppercase tracking-[0.3em] text-emerald-300/80">{periodTag}</p>
+      <p className="mt-1 font-display text-3xl tracking-wide text-white md:text-4xl">
+        {card.title}
+        <span className="text-slate-400"> - </span>
+        <span className="font-['Impact','Haettenschweiler','Arial_Black',sans-serif] text-emerald-300/95">{fmtRevenueTv(st.revenue)}</span>
+      </p>
       {card.region ? (
         <p className="font-tv text-sm text-slate-500">{card.marketCount + " offices · combined"}</p>
       ) : null}
@@ -199,6 +350,7 @@ var LeaderboardRow = memo(function LeaderboardRow(p) {
 var Leaderboard = memo(function Leaderboard(p) {
   var title = p.type === "knocker" ? "Knockers" : "Closers";
   var sub = p.type === "knocker" ? "Sets · " + p.rangeLabel : "Closed · " + p.rangeLabel;
+  var emptyMsg = "No activity for " + (p.rangePrefix || "this week").toLowerCase() + " in the selected scope.";
   return (
     <section
       className="flex min-h-0 min-w-0 flex-1 flex-col rounded-2xl border border-white/[0.07] bg-black/25 p-4 shadow-xl backdrop-blur-sm motion-safe:animate-tv-float motion-reduce:animate-none"
@@ -211,11 +363,11 @@ var Leaderboard = memo(function Leaderboard(p) {
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {p.rows.length === 0 ? (
           <p className="flex flex-1 items-center justify-center px-2 text-center font-tv text-base leading-snug text-slate-400">
-            No activity for this week in the selected scope.
+            {emptyMsg}
           </p>
         ) : (
           <TVAutoScroll
-            resetKey={p.rows.length + "-" + p.type}
+            resetKey={p.selectedPeriodKey + "-" + p.rows.length + "-" + p.type}
             className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain pr-1"
           >
             {p.rows.map(function (r, i) {
@@ -313,6 +465,7 @@ function ChallengeMatchupCard(p) {
 }
 
 function TVChallengeStrip(p) {
+  var challengeTag = (p.rangePrefix || "This week") + " · challenge";
   if (!p.blocks || p.blocks.length === 0) {
     return (
       <div className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-center font-tv text-sm text-slate-500 backdrop-blur-sm motion-safe:animate-tv-float motion-reduce:animate-none">
@@ -327,9 +480,9 @@ function TVChallengeStrip(p) {
         className="flex min-h-0 w-full min-w-0 flex-1 flex-col motion-safe:animate-tv-float motion-reduce:animate-none"
         style={{ animationDelay: "0.35s" }}
       >
-        <p className="mb-3 font-tv text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500">This week · challenge</p>
+        <p className="mb-3 font-tv text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500">{challengeTag}</p>
         <TVAutoScroll
-          resetKey={"ch-" + p.blocks.length}
+          resetKey={(p.selectedPeriodKey || "") + "-ch-" + p.blocks.length}
           className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto"
         >
           {p.blocks.map(function (b) {
@@ -344,7 +497,7 @@ function TVChallengeStrip(p) {
       className="flex min-h-0 w-full min-w-0 flex-1 flex-col motion-safe:animate-tv-float motion-reduce:animate-none"
       style={{ animationDelay: "0.35s" }}
     >
-      <p className="mb-3 shrink-0 font-tv text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500">This week · challenge</p>
+      <p className="mb-3 shrink-0 font-tv text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500">{challengeTag}</p>
       <div className="flex min-h-0 flex-1 flex-col gap-4">
         {p.blocks.map(function (b) {
           return <ChallengeMatchupCard key={b.key} b={b} variant="market" />;
@@ -426,7 +579,17 @@ export default function TVView(p) {
           regionLabel={p.regionLabel}
           marketName={p.marketName}
           officeName={p.officeName}
-          rangeLabel={p.rangeLabel}
+          rangePrefix={p.rangePrefix}
+          rangeDetail={p.rangeDetail}
+          period={p.period}
+          selectedPeriodKey={p.selectedPeriodKey}
+          weekPickerOptions={p.weekPickerOptions}
+          monthPickerOptions={p.monthPickerOptions}
+          onPeriodPick={p.onPeriodPick}
+          onSelectWeek={p.onSelectWeek}
+          onSelectMonth={p.onSelectMonth}
+          onResetToPresentWeek={p.onResetToPresentWeek}
+          onResetToPresentMonth={p.onResetToPresentMonth}
           isRegionScope={p.isRegionScope}
           onSelectRegion={p.onSelectRegion}
           onSelectMarket={p.onSelectMarket}
@@ -434,25 +597,34 @@ export default function TVView(p) {
           displayTime={displayTime}
           onClose={p.onClose}
         />
-        <MVPBanner mvp={p.mvpWeek} />
+        <MVPBanner mvp={p.mvp} period={p.period} rangePrefix={p.rangePrefix} />
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-hidden px-5 pb-5 pt-2 lg:grid-cols-2">
           <div className="flex min-h-0 flex-col gap-3 overflow-hidden">
             <Leaderboard
               type="closer"
               rows={p.closerRows}
               rangeLabel={p.rangeLabel}
+              rangePrefix={p.rangePrefix}
+              selectedPeriodKey={p.selectedPeriodKey}
               motionStyle={{ animationDelay: "0.05s" }}
             />
             <Leaderboard
               type="knocker"
               rows={p.knockerRows}
               rangeLabel={p.rangeLabel}
+              rangePrefix={p.rangePrefix}
+              selectedPeriodKey={p.selectedPeriodKey}
               motionStyle={{ animationDelay: "0.12s" }}
             />
           </div>
           <div className="flex min-h-0 flex-col gap-3 overflow-hidden">
-            <TVMarketCard card={p.marketCard} />
-            <TVChallengeStrip blocks={p.challengeBlocks} isRegionScope={p.isRegionScope} />
+            <TVMarketCard card={p.marketCard} rangePrefix={p.rangePrefix} />
+            <TVChallengeStrip
+              blocks={p.challengeBlocks}
+              isRegionScope={p.isRegionScope}
+              rangePrefix={p.rangePrefix}
+              selectedPeriodKey={p.selectedPeriodKey}
+            />
           </div>
         </div>
       </div>

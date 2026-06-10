@@ -37,6 +37,8 @@ var DD = { markets: {}, reps: {}, dailyKPIs: {}, accountabilityLog: {}, settings
 var ACCESS_DD = { users: {}, invites: {}, pendingInvites: {}, ownerUid: null, accessRequests: {} };
 var ROLE_RANK = { owner: 2, admin: 1, default: 0 };
 var EVENT_LOG_MAX = 400;
+/** Re-merge Enter form from in-memory server data while on Enter tab. */
+var FORM_RECONCILE_INTERVAL_MS = 60000;
 var PROMO_SALES_NEED = 8;
 var PROMO_RECRUITS_NEED = 2;
 var TODAY = new Date().toISOString().split("T")[0];
@@ -51,6 +53,7 @@ var MAIN_TABS = [
   { k: "trends", l: "Trends" },
   { k: "accountability", l: "Log" },
   { k: "rollup", l: "Markets" },
+  { k: "revenue", l: "Revenue" },
   { k: "challenge", l: "Weekly Challenge" },
   { k: "report", l: "Report" },
   { k: "manage", l: "Manage" },
@@ -85,21 +88,30 @@ function onRoster(rep) {
 }
 
 var K_FIELDS = [
-  { key: "doorsKnocked", label: "Doors", min: 120 },
-  { key: "convosHad", label: "Convos", min: 50 },
-  { key: "setsSet", label: "Sets" },
-  { key: "apptsRan", label: "Appts" },
+  { key: "apptsRan", label: "Appts Ran" },
+  { key: "cads", label: "CADs" },
   { key: "closes", label: "Closes" },
+  { key: "convosHad", label: "Convos", min: 50 },
+  { key: "doorsKnocked", label: "Doors", min: 120 },
+  { key: "revenue", label: "REV" },
+  { key: "setsSet", label: "Sets" },
 ];
 var C_FIELDS = [
   { key: "apptsRan", label: "Appts Ran" },
-  { key: "apptsClosed", label: "Closed" },
   { key: "cads", label: "CADs" },
+  { key: "apptsClosed", label: "Closes" },
   { key: "convosHad", label: "Convos" },
   { key: "doorsKnocked", label: "Doors" },
+  { key: "revenue", label: "REV" },
   { key: "selfGenSets", label: "SG Sets" },
   { key: "selfGenCloses", label: "SG Closes" },
 ];
+function revenueLabel(data) {
+  return "REV";
+}
+function fmtRevenue(n) {
+  return "$" + (n || 0).toLocaleString();
+}
 var KPI_FIELD_LABEL = {};
 K_FIELDS.forEach(function (f) {
   KPI_FIELD_LABEL[f.key] = f.label;
@@ -172,6 +184,143 @@ async function load() {
 async function save(d) {
   var ref = doc(db, "app", "state");
   await setDoc(ref, d, { merge: false });
+}
+
+function serializeStoredKpiEntry(entry) {
+  return entry ? JSON.stringify(entry) : "";
+}
+
+function kpiServerEntryChangedSinceBaseline(baselineSer, serverEntry) {
+  return baselineSer !== serializeStoredKpiEntry(serverEntry);
+}
+
+/** Fingerprint of saved KPI rows for one market + date (drives passive form merge). */
+function kpiFormFingerprint(data, mId, dt) {
+  var parts = [];
+  mReps(data, mId).forEach(function (p) {
+    var k = gK(data, p[0], dt);
+    parts.push(p[0] + ":" + serializeStoredKpiEntry(k));
+  });
+  return parts.join("|");
+}
+
+function buildKpiFormState(mId, dt, data) {
+  var inp = {};
+  var notes = {};
+  mReps(data, mId).forEach(function (p) {
+    var id = p[0],
+      rep = p[1],
+      ex = gK(data, id, dt);
+    if (rep.role === "closer") {
+      inp[id] = ex
+        ? {
+            apptsRan: ex.apptsRan || "",
+            apptsClosed: ex.apptsClosed || "",
+            cads: ex.cads || "",
+            convosHad: ex.convosHad || "",
+            doorsKnocked: ex.doorsKnocked || "",
+            revenue: ex.revenue || "",
+            selfGenSets: ex.selfGenSets || "",
+            selfGenCloses: ex.selfGenCloses || "",
+            apptSources: ex.apptSources != null ? String(ex.apptSources) : "",
+          }
+        : {
+            apptsRan: "",
+            apptsClosed: "",
+            cads: "",
+            convosHad: "",
+            doorsKnocked: "",
+            revenue: "",
+            selfGenSets: "",
+            selfGenCloses: "",
+            apptSources: "",
+          };
+    } else {
+      var cf = [];
+      if (ex && Array.isArray(ex.creditFails)) {
+        cf = ex.creditFails.map(function (x) {
+          return { closerId: x.closerId || "" };
+        });
+      }
+      var closers = mReps(data, rep.marketId, "closer");
+      var defAssign = (cf[0] && cf[0].closerId) || (closers[0] ? closers[0][0] : "") || "";
+      inp[id] = ex
+        ? {
+            doorsKnocked: ex.doorsKnocked,
+            revenue: ex.revenue || "",
+            convosHad: ex.convosHad || "",
+            setsSet: ex.setsSet,
+            apptsRan: ex.apptsRan,
+            cads: ex.cads || "",
+            closes: ex.closes,
+            creditFails: cf,
+            creditFailCount: String(cf.length),
+            creditFailAssignCloser: defAssign,
+          }
+        : {
+            doorsKnocked: "",
+            revenue: "",
+            convosHad: "",
+            setsSet: "",
+            apptsRan: "",
+            cads: "",
+            closes: "",
+            creditFails: [],
+            creditFailCount: "0",
+            creditFailAssignCloser: closers[0] ? closers[0][0] : "",
+          };
+    }
+    notes[id] = ex && ex.notes ? ex.notes : "";
+  });
+  return { inp: inp, notes: notes };
+}
+
+/**
+ * Patch only dirty rep keys in Firestore; returns { eventLog, patches }.
+ * patches: [{ key, entry }]
+ */
+async function saveKpiEntries(patches, eventLogEntries, actor) {
+  var ref = doc(db, "app", "state");
+  var lastErr = null;
+  for (var attempt = 0; attempt < 2; attempt++) {
+    try {
+      return await runTransaction(db, function (transaction) {
+        return transaction.get(ref).then(function (snap) {
+          var raw = snap.exists() ? snap.data() : {};
+          var prevLog = Array.isArray(raw.eventLog) ? raw.eventLog.slice() : [];
+          var tsBatch = new Date().toISOString();
+          for (var j = eventLogEntries.length - 1; j >= 0; j--) {
+            var ev = eventLogEntries[j];
+            prevLog.unshift({
+              ts: tsBatch,
+              actor: actor,
+              message: String(ev.message),
+              marketId: ev.marketId != null && ev.marketId !== "" ? ev.marketId : null,
+            });
+          }
+          if (prevLog.length > EVENT_LOG_MAX) prevLog = prevLog.slice(0, EVENT_LOG_MAX);
+
+          if (!snap.exists()) {
+            var seed = { ...DD, dailyKPIs: { ...(DD.dailyKPIs || {}) }, eventLog: prevLog };
+            patches.forEach(function (it) {
+              seed.dailyKPIs[it.key] = it.entry;
+            });
+            transaction.set(ref, seed);
+            return { eventLog: prevLog, patches: patches };
+          }
+
+          patches.forEach(function (it) {
+            transaction.update(ref, new FieldPath("dailyKPIs", it.key), it.entry);
+          });
+          transaction.update(ref, "eventLog", prevLog);
+          return { eventLog: prevLog, patches: patches };
+        });
+      });
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr;
 }
 /** Append one row to `app/state` event log (e.g. when `data` is not loaded in memory). */
 async function appendEventLogEntry(message, actorEmail) {
@@ -426,6 +575,7 @@ function getRangeStats(data, rid, dates) {
     cads: 0,
     selfGenSets: 0,
     selfGenCloses: 0,
+    revenue: 0,
     creditFailCount: 0,
     days: 0,
     hours: 0,
@@ -442,6 +592,7 @@ function getRangeStats(data, rid, dates) {
       t.cads += k.cads || 0;
       t.selfGenSets += k.selfGenSets || 0;
       t.selfGenCloses += k.selfGenCloses || 0;
+      t.revenue += k.revenue || 0;
       var cf = k.creditFails;
       t.creditFailCount += Array.isArray(cf) ? cf.length : 0;
       t.hours += closerHours(k);
@@ -524,8 +675,8 @@ function normalizeCreditFails(arr, validCloserIds) {
 
 function kpiNumericKeys(rep) {
   return rep.role === "closer"
-    ? ["apptsRan", "apptsClosed", "cads", "convosHad", "doorsKnocked", "selfGenSets", "selfGenCloses"]
-    : ["doorsKnocked", "convosHad", "setsSet", "apptsRan", "closes"];
+    ? ["apptsRan", "apptsClosed", "cads", "convosHad", "doorsKnocked", "revenue", "selfGenSets", "selfGenCloses"]
+    : ["doorsKnocked", "revenue", "convosHad", "setsSet", "apptsRan", "cads", "closes"];
 }
 
 function existingKpiHasValues(k, rep) {
@@ -751,6 +902,8 @@ function formatChallengeWeekTabLabel(monYmd, sunYmd) {
 }
 /** How many past weeks to show as selectable tabs on Weekly Challenge. */
 var CHALLENGE_WEEK_HISTORY = 52;
+/** How many past months to offer in TV period picker. */
+var TV_MONTH_HISTORY = 24;
 /** Monday-based week index (for rotating office-vs-office matchups). */
 function challengeWeekRoundIndex(anchorYmd) {
   var mon = weekStartMonday(anchorYmd);
@@ -809,6 +962,32 @@ function weeklyMVP(data, selM, anchorDate) {
   if (bestK.sets < 0) bestK.sets = 0;
   if (bestC.closes < 0) bestC.closes = 0;
   return { weekStart: wr.start, weekEnd: wr.end, knocker: bestK, closer: bestC };
+}
+/** Top knocker by setsSet and top closer by apptsClosed in the calendar month containing anchorDate. */
+function monthlyMVP(data, selM, anchorDate) {
+  var dates = monthDateRange(anchorDate).filter(function (d) {
+    return d <= anchorDate;
+  });
+  var bestK = { rid: null, name: "", sets: -1, market: "" };
+  var bestC = { rid: null, name: "", closes: -1, market: "" };
+  scopedActiveReps(data, selM).forEach(function (p) {
+    var rid = p[0],
+      rep = p[1];
+    var s = getRangeStats(data, rid, dates);
+    var mname = data.markets[rep.marketId] ? data.markets[rep.marketId].name : "";
+    if (rep.role !== "closer" && s.setsSet > bestK.sets) {
+      bestK = { rid: rid, name: rep.name, sets: s.setsSet, market: mname };
+    }
+    if (rep.role === "closer" && s.apptsClosed > bestC.closes) {
+      bestC = { rid: rid, name: rep.name, closes: s.apptsClosed, market: mname };
+    }
+  });
+  if (bestK.sets < 0) bestK.sets = 0;
+  if (bestC.closes < 0) bestC.closes = 0;
+  return { knocker: bestK, closer: bestC };
+}
+function formatTvMonthLabel(ymd) {
+  return new Date(ymd + "T12:00:00").toLocaleDateString(undefined, { month: "long", year: "numeric" });
 }
 
 function dayMeetsStandardKnocker(k) {
@@ -910,7 +1089,7 @@ function promotionKnockerProgress(data, rid, rep) {
 }
 
 function aggregateMarketChallenge(data, mId, dates) {
-  var t = { doors: 0, sets: 0, closes: 0, convos: 0, appts: 0, reps: 0 };
+  var t = { doors: 0, sets: 0, closes: 0, convos: 0, appts: 0, revenue: 0, reps: 0 };
   repsInMarketForStats(data, mId).forEach(function (p) {
     var st = getRangeStats(data, p[0], dates);
     if (st.days === 0) return;
@@ -920,10 +1099,20 @@ function aggregateMarketChallenge(data, mId, dates) {
     t.sets += st.setsSet;
     t.closes += st.closes + st.apptsClosed;
     t.appts += st.apptsRan;
+    t.revenue += st.revenue;
   });
   t.d2c = t.doors > 0 ? pct(t.convos, t.doors) : 0;
   t.c2s = t.convos > 0 ? pct(t.sets, t.convos) : 0;
   return t;
+}
+
+function marketRevenueOnDay(data, mId, dt) {
+  var total = 0;
+  repsInMarketForStats(data, mId).forEach(function (p) {
+    var k = gK(data, p[0], dt);
+    if (k) total += k.revenue || 0;
+  });
+  return total;
 }
 
 function dealValueForMarket(data, mId) {
@@ -1429,6 +1618,19 @@ export default function App() {
   var _tv = useState(false),
     tvMode = _tv[0],
     setTvMode = _tv[1];
+  var _tvp = useState("week"),
+    tvPeriod = _tvp[0],
+    setTvPeriod = _tvp[1];
+  var _tvwa = useState(function () {
+      return weekStartMonday(TODAY);
+    }),
+    tvWeekAnchor = _tvwa[0],
+    setTvWeekAnchor = _tvwa[1];
+  var _tvma = useState(function () {
+      return monthStart();
+    }),
+    tvMonthAnchor = _tvma[0],
+    setTvMonthAnchor = _tvma[1];
   var _ev = useState("cards"),
     enterViewMode = _ev[0],
     setEnterViewMode = _ev[1];
@@ -1485,6 +1687,16 @@ export default function App() {
   var tabStripScrollRef = useRef(null);
   var claimStartedRef = useRef(false);
   var swipeTabTouchRef = useRef({ x: 0, y: 0, ignore: false, axisLock: null, tracking: false });
+  var dirtyRepIdsRef = useRef(new Set());
+  var serverBaselineRef = useRef({});
+  var kpiFormFpRef = useRef("");
+  var dataRef = useRef(DD);
+  var _krb = useState(""),
+    kpiRemoteBanner = _krb[0],
+    setKpiRemoteBanner = _krb[1];
+  var _kps = useState(false),
+    kpiSaving = _kps[0],
+    setKpiSaving = _kps[1];
 
   var onSwipeTabTouchStart = useCallback(function (e) {
     var el = e.target;
@@ -2032,63 +2244,56 @@ export default function App() {
     persist({ ...data, settings: { ...(data.settings || {}), averageDealValue: num } }, { message: "Company average deal ($): " + num, marketId: null });
   }
 
-  function initKI(mId, dt) {
-    var reps = mReps(data, mId);
-    var inp = {};
-    var notes = {};
-    reps.forEach(function (p) {
-      var id = p[0],
-        rep = p[1],
-        ex = gK(data, id, dt);
-      if (rep.role === "closer") {
-        inp[id] = ex
-          ? {
-              apptsRan: ex.apptsRan || "",
-              apptsClosed: ex.apptsClosed || "",
-              cads: ex.cads || "",
-              convosHad: ex.convosHad || "",
-              doorsKnocked: ex.doorsKnocked || "",
-              selfGenSets: ex.selfGenSets || "",
-              selfGenCloses: ex.selfGenCloses || "",
-              apptSources: ex.apptSources != null ? String(ex.apptSources) : "",
-            }
-          : { apptsRan: "", apptsClosed: "", cads: "", convosHad: "", doorsKnocked: "", selfGenSets: "", selfGenCloses: "", apptSources: "" };
-      } else {
-        var cf = [];
-        if (ex && Array.isArray(ex.creditFails)) {
-          cf = ex.creditFails.map(function (x) {
-            return { closerId: x.closerId || "" };
-          });
-        }
-        var closers = mReps(data, rep.marketId, "closer");
-        var defAssign = (cf[0] && cf[0].closerId) || (closers[0] ? closers[0][0] : "") || "";
-        inp[id] = ex
-          ? {
-              doorsKnocked: ex.doorsKnocked,
-              convosHad: ex.convosHad || "",
-              setsSet: ex.setsSet,
-              apptsRan: ex.apptsRan,
-              closes: ex.closes,
-              creditFails: cf,
-              creditFailCount: String(cf.length),
-              creditFailAssignCloser: defAssign,
-            }
-          : {
-              doorsKnocked: "",
-              convosHad: "",
-              setsSet: "",
-              apptsRan: "",
-              closes: "",
-              creditFails: [],
-              creditFailCount: "0",
-              creditFailAssignCloser: closers[0] ? closers[0][0] : "",
-            };
-      }
-      notes[id] = ex && ex.notes ? ex.notes : "";
-    });
-    setKpiIn(inp);
-    setKpiNotes(notes);
+  function clearAllKpiDirty() {
+    dirtyRepIdsRef.current = new Set();
+    serverBaselineRef.current = {};
   }
+
+  function markRepDirty(rid, dataSource) {
+    var set = dirtyRepIdsRef.current;
+    if (set.has(rid)) return;
+    set.add(rid);
+    var src = dataSource || data;
+    serverBaselineRef.current[rid] = serializeStoredKpiEntry(gK(src, rid, entryDate));
+  }
+
+  function mergeKpiFormFromServer(serverData) {
+    if (!selM || isRegion(selM) || !loaded) return;
+    var fresh = buildKpiFormState(selM, entryDate, serverData);
+    var dirty = dirtyRepIdsRef.current;
+    setKpiIn(function (prev) {
+      var next = { ...fresh.inp };
+      dirty.forEach(function (rid) {
+        if (prev[rid] !== undefined) next[rid] = prev[rid];
+      });
+      return next;
+    });
+    setKpiNotes(function (prev) {
+      var next = { ...fresh.notes };
+      dirty.forEach(function (rid) {
+        if (prev[rid] !== undefined) next[rid] = prev[rid];
+      });
+      return next;
+    });
+  }
+
+  function initKI(mId, dt, dataSource) {
+    clearAllKpiDirty();
+    setKpiRemoteBanner("");
+    var src = dataSource || data;
+    var fresh = buildKpiFormState(mId, dt, src);
+    setKpiIn(fresh.inp);
+    setKpiNotes(fresh.notes);
+    kpiFormFpRef.current = kpiFormFingerprint(src, mId, dt);
+  }
+
+  useEffect(
+    function () {
+      dataRef.current = data;
+    },
+    [data]
+  );
+
   useEffect(
     function () {
       if (selM && !isRegion(selM) && loaded) initKI(selM, entryDate);
@@ -2096,63 +2301,254 @@ export default function App() {
     [selM, entryDate, loaded, JSON.stringify(data.reps)]
   );
 
+  var kpiFormFp =
+    selM && !isRegion(selM) && loaded ? kpiFormFingerprint(data, selM, entryDate) : "";
+
+  useEffect(
+    function () {
+      if (!kpiFormFp || !selM || isRegion(selM) || !loaded) return;
+      if (kpiFormFpRef.current === kpiFormFp) return;
+      var hadDirty = dirtyRepIdsRef.current.size > 0;
+      kpiFormFpRef.current = kpiFormFp;
+      mergeKpiFormFromServer(data);
+      if (hadDirty) {
+        setKpiRemoteBanner("Someone else updated this day — your unsaved rows are unchanged.");
+      }
+    },
+    [kpiFormFp, selM, entryDate, loaded, data]
+  );
+
+  useEffect(
+    function () {
+      if (!loaded || tab !== "enter" || !selM || isRegion(selM)) return;
+      var id = setInterval(function () {
+        mergeKpiFormFromServer(dataRef.current);
+      }, FORM_RECONCILE_INTERVAL_MS);
+      return function () {
+        clearInterval(id);
+      };
+    },
+    [loaded, tab, selM, entryDate]
+  );
+
+  useEffect(
+    function () {
+      if (!loaded || !user) return;
+      function onVis() {
+        if (document.visibilityState !== "visible") return;
+        getDoc(doc(db, "app", "state"))
+          .then(function (snap) {
+            var merged = { ...DD, ...(snap.exists() ? snap.data() : {}) };
+            setData(merged);
+            dataRef.current = merged;
+            if (tab === "enter" && selM && !isRegion(selM)) {
+              var fp = kpiFormFingerprint(merged, selM, entryDate);
+              if (fp !== kpiFormFpRef.current) {
+                var hadDirty = dirtyRepIdsRef.current.size > 0;
+                kpiFormFpRef.current = fp;
+                mergeKpiFormFromServer(merged);
+                if (hadDirty) {
+                  setKpiRemoteBanner("Someone else updated this day — your unsaved rows are unchanged.");
+                }
+              }
+            }
+          })
+          .catch(function () {});
+      }
+      document.addEventListener("visibilitychange", onVis);
+      return function () {
+        document.removeEventListener("visibilitychange", onVis);
+      };
+    },
+    [loaded, user, tab, selM, entryDate]
+  );
+
+  function patchKpiIn(rid, updater) {
+    markRepDirty(rid);
+    setKpiIn(updater);
+  }
+
+  function patchKpiNotes(rid, val) {
+    markRepDirty(rid);
+    setKpiNotes(function (prev) {
+      return { ...prev, [rid]: val };
+    });
+  }
+
+  function refreshConflictedReps(serverData, conflictIds) {
+    var fresh = buildKpiFormState(selM, entryDate, serverData);
+    Object.keys(conflictIds).forEach(function (rid) {
+      dirtyRepIdsRef.current.delete(rid);
+      delete serverBaselineRef.current[rid];
+      if (fresh.inp[rid] !== undefined) {
+        setKpiIn(function (prev) {
+          return { ...prev, [rid]: fresh.inp[rid] };
+        });
+      }
+      if (fresh.notes[rid] !== undefined) {
+        setKpiNotes(function (prev) {
+          return { ...prev, [rid]: fresh.notes[rid] };
+        });
+      }
+    });
+    kpiFormFpRef.current = kpiFormFingerprint(serverData, selM, entryDate);
+  }
+
   function saveKPIs() {
-    if (!selM || isRegion(selM)) return;
+    if (!selM || isRegion(selM) || kpiSaving) return;
     var closerLists = {};
-    function closerIdsForRep(rid) {
-      var mid = data.reps[rid] && data.reps[rid].marketId;
+    function closerIdsForRep(rid, dataSource) {
+      var mid = dataSource.reps[rid] && dataSource.reps[rid].marketId;
       if (!mid) return [];
-      if (!closerLists[mid]) closerLists[mid] = mReps(data, mid, "closer").map(function (x) {
-        return x[0];
-      });
+      if (!closerLists[mid]) {
+        closerLists[mid] = mReps(dataSource, mid, "closer").map(function (x) {
+          return x[0];
+        });
+      }
       return closerLists[mid];
     }
     var gridMode = enterViewMode === "grid";
-    var needOverwrite = [];
-    var toWrite = [];
-    Object.entries(kpiIn).forEach(function (p) {
-      var rid = p[0],
-        v = p[1],
-        rep = data.reps[rid];
-      if (!rep) return;
-      if (!kpiEntryNeedsSave(data, rid, rep, v, kpiNotes[rid], entryDate, closerIdsForRep(rid), gridMode)) return;
-      if (
-        existingKpiHasValues(gK(data, rid, entryDate), rep) &&
-        entryFormDiffersFromSaved(data, rid, rep, v, kpiNotes[rid], entryDate, closerIdsForRep(rid), gridMode)
-      ) {
-        needOverwrite.push(rep.name);
-      }
-      toWrite.push({ rid: rid, v: v, rep: rep });
-    });
-    if (toWrite.length === 0) {
+    var dirtyList = Array.from(dirtyRepIdsRef.current);
+    if (dirtyList.length === 0) {
       flash("No changes to save.");
       return;
     }
-    if (needOverwrite.length && !confirm("Data already exists for " + needOverwrite.length + " rep(s) on " + entryDate + " — overwrite?")) return;
 
-    var n = { ...data, dailyKPIs: { ...data.dailyKPIs } };
-    var saved = 0,
-      flagged = 0;
-    var logEntries = [];
-    var mk = data.markets[selM] && data.markets[selM].name ? data.markets[selM].name : selM;
-    toWrite.forEach(function (item) {
-      var rid = item.rid,
-        rep = item.rep,
-        v = item.v;
-      var prev = gK(data, rid, entryDate);
-      var entry = buildEntryFromForm(rid, rep, v, kpiNotes[rid], entryDate, closerIdsForRep(rid), gridMode);
-      n.dailyKPIs[kk(rid, entryDate)] = entry;
-      saved++;
-      if (countEntryDayActionFlags(n, rid, rep, entryDate) > 0) flagged++;
-      var delta = describeKpiDelta(data, rep, prev, entry);
-      var roleLab = rep.role === "closer" ? "Closer" : "Knocker";
-      logEntries.push({
-        message: "KPI · " + mk + " · " + entryDate + " · " + rep.name + " (" + roleLab + ") — " + delta,
-        marketId: selM,
+    setKpiSaving(true);
+    getDoc(doc(db, "app", "state"))
+      .then(function (snap) {
+        var serverData = { ...DD, ...(snap.exists() ? snap.data() : {}) };
+        var conflictNames = [];
+        var conflictIds = {};
+        dirtyList.forEach(function (rid) {
+          var rep = serverData.reps[rid];
+          if (!rep) return;
+          var baselineSer = serverBaselineRef.current[rid];
+          if (baselineSer === undefined) baselineSer = "";
+          if (kpiServerEntryChangedSinceBaseline(baselineSer, gK(serverData, rid, entryDate))) {
+            conflictNames.push(rep.name);
+            conflictIds[rid] = true;
+          }
+        });
+
+        var needOverwrite = [];
+        var toWrite = [];
+        dirtyList.forEach(function (rid) {
+          if (conflictIds[rid]) return;
+          var v = kpiIn[rid];
+          var rep = serverData.reps[rid];
+          if (!rep || !v) return;
+          if (!kpiEntryNeedsSave(serverData, rid, rep, v, kpiNotes[rid], entryDate, closerIdsForRep(rid, serverData), gridMode)) {
+            return;
+          }
+          if (
+            existingKpiHasValues(gK(serverData, rid, entryDate), rep) &&
+            entryFormDiffersFromSaved(serverData, rid, rep, v, kpiNotes[rid], entryDate, closerIdsForRep(rid, serverData), gridMode)
+          ) {
+            needOverwrite.push(rep.name);
+          }
+          toWrite.push({ rid: rid, v: v, rep: rep });
+        });
+
+        if (conflictNames.length > 0 && toWrite.length === 0) {
+          flash(
+            "Could not save: " + conflictNames.join(", ") + " were updated by someone else. Those rows were refreshed."
+          );
+          refreshConflictedReps(serverData, conflictIds);
+          return null;
+        }
+
+        if (conflictNames.length > 0) {
+          var proceed = confirm(
+            conflictNames.join(", ") +
+              " were updated by someone else. Save your other " +
+              toWrite.length +
+              " edit(s) anyway?"
+          );
+          if (!proceed) return null;
+          refreshConflictedReps(serverData, conflictIds);
+        }
+
+        if (toWrite.length === 0) {
+          dirtyList.forEach(function (rid) {
+            if (conflictIds[rid]) return;
+            var v = kpiIn[rid];
+            var rep = serverData.reps[rid];
+            if (rep && v && !kpiEntryNeedsSave(serverData, rid, rep, v, kpiNotes[rid], entryDate, closerIdsForRep(rid, serverData), gridMode)) {
+              dirtyRepIdsRef.current.delete(rid);
+              delete serverBaselineRef.current[rid];
+            }
+          });
+          flash("No changes to save.");
+          return null;
+        }
+        if (
+          needOverwrite.length &&
+          !confirm("Data already exists for " + needOverwrite.length + " rep(s) on " + entryDate + " — overwrite?")
+        ) {
+          return null;
+        }
+
+        var patches = [];
+        var logEntries = [];
+        var mk = serverData.markets[selM] && serverData.markets[selM].name ? serverData.markets[selM].name : selM;
+        var flagged = 0;
+        var mergedDaily = { ...(serverData.dailyKPIs || {}) };
+        toWrite.forEach(function (item) {
+          var rid = item.rid,
+            rep = item.rep,
+            v = item.v;
+          var prev = gK(serverData, rid, entryDate);
+          var entry = buildEntryFromForm(rid, rep, v, kpiNotes[rid], entryDate, closerIdsForRep(rid, serverData), gridMode);
+          var key = kk(rid, entryDate);
+          patches.push({ key: key, entry: entry });
+          mergedDaily[key] = entry;
+          var probeData = { ...serverData, dailyKPIs: mergedDaily };
+          if (countEntryDayActionFlags(probeData, rid, rep, entryDate) > 0) flagged++;
+          var delta = describeKpiDelta(serverData, rep, prev, entry);
+          var roleLab = rep.role === "closer" ? "Closer" : "Knocker";
+          logEntries.push({
+            message: "KPI · " + mk + " · " + entryDate + " · " + rep.name + " (" + roleLab + ") — " + delta,
+            marketId: selM,
+          });
+        });
+
+        var actor = user && user.email ? user.email : user && user.uid ? user.uid : null;
+        return saveKpiEntries(patches, logEntries, actor).then(function (result) {
+          return { result: result, toWrite: toWrite, mergedDaily: mergedDaily, flagged: flagged };
+        });
+      })
+      .then(function (pack) {
+        if (!pack) return;
+        var saved = pack.toWrite.length;
+        setData(function (prev) {
+          return {
+            ...prev,
+            dailyKPIs: { ...prev.dailyKPIs, ...pack.mergedDaily },
+            eventLog: pack.result.eventLog,
+          };
+        });
+        pack.toWrite.forEach(function (item) {
+          dirtyRepIdsRef.current.delete(item.rid);
+          delete serverBaselineRef.current[item.rid];
+        });
+        kpiFormFpRef.current = kpiFormFingerprint(
+          { ...dataRef.current, dailyKPIs: { ...dataRef.current.dailyKPIs, ...pack.mergedDaily }, eventLog: pack.result.eventLog },
+          selM,
+          entryDate
+        );
+        setKpiRemoteBanner("");
+        flash(
+          saved + " rep" + (saved === 1 ? "" : "s") + " saved for " + entryDate + ". " + pack.flagged + " flagged below standard.",
+          4500
+        );
+      })
+      .catch(function (e) {
+        flash((e && e.message) || "Save failed. Try again.");
+      })
+      .finally(function () {
+        setKpiSaving(false);
       });
-    });
-    persist(n, { entries: logEntries });
-    flash(saved + " rep" + (saved === 1 ? "" : "s") + " saved for " + entryDate + ". " + flagged + " flagged below standard.", 4500);
   }
   function openLog(rid) {
     setLogRep(rid);
@@ -2712,17 +3108,19 @@ export default function App() {
     var mkt = data.markets[rep.marketId];
     if (!mkt) return;
     var s = getRangeStats(data, rid, rangeDates);
-    if (s.doorsKnocked === 0) return;
+    if (s.doorsKnocked === 0 && s.revenue === 0) return;
     knockerLB.push({
       rid: rid,
       name: rep.name,
       market: mkt.name,
       role: rep.role || "knocker",
       doors: s.doorsKnocked,
+      revenue: s.revenue,
       convos: s.convosHad,
       sets: s.setsSet,
       d2c: s.d2c,
       c2s: s.c2s,
+      cadRate: s.cadRate,
       setsAvg: s.setsAvg,
       days: s.days,
       streak: streakCount(data, rid, rep, endDate),
@@ -2734,6 +3132,8 @@ export default function App() {
     if (k === "sets") return b.sets - a.sets;
     if (k === "d2c") return b.d2c - a.d2c;
     if (k === "c2s") return b.c2s - a.c2s;
+    if (k === "cadRate") return b.cadRate - a.cadRate;
+    if (k === "revenue") return b.revenue - a.revenue;
     return b.doors - a.doors;
   });
 
@@ -2750,7 +3150,9 @@ export default function App() {
       name: rep.name,
       market: mkt.name,
       closes: s.apptsClosed,
+      revenue: s.revenue,
       apptsRan: s.apptsRan,
+      sets: s.setsSet,
       hours: Math.round(s.hours * 10) / 10,
       hoursAvg: s.hoursAvg,
       closeRate: s.closeRate,
@@ -2766,6 +3168,7 @@ export default function App() {
     if (k === "closeRate") return b.closeRate - a.closeRate;
     if (k === "selfGens") return b.monthSelfGens - a.monthSelfGens;
     if (k === "hours") return b.hours - a.hours;
+    if (k === "revenue") return b.revenue - a.revenue;
     return b.closes - a.closes;
   });
 
@@ -2832,6 +3235,29 @@ export default function App() {
     return b.cl - a.cl;
   });
 
+  var revenueOfficeData = mIds.map(function (mid) {
+    var st = aggregateMarketChallenge(data, mid, rangeDates);
+    var mkt = data.markets[mid];
+    return { id: mid, name: mkt ? mkt.name : mid, revenue: st.revenue, reps: st.reps };
+  });
+  revenueOfficeData.sort(function (a, b) {
+    return b.revenue - a.revenue;
+  });
+  var revenueMonthDates = monthDateRange(TODAY);
+  var revenueMonthCumul = {};
+  mIds.forEach(function (mid) {
+    revenueMonthCumul[mid] = 0;
+  });
+  var revenueMonthChartData = revenueMonthDates.map(function (dt) {
+    var row = { date: dt.slice(5) };
+    mIds.forEach(function (mid) {
+      revenueMonthCumul[mid] += marketRevenueOnDay(data, mid, dt);
+      row[mid] = revenueMonthCumul[mid];
+    });
+    return row;
+  });
+  var revenueChartColors = ["#FF3B30", "#34C759", "#007AFF", "#FF9500", "#AF52DE", "#5856D6", "#FF2D55", "#00C7BE", "#FFD60A", "#64D2FF"];
+
   var mvpWeek = selM ? weeklyMVP(data, selM, endDate) : null;
   var challengeWeekBounds = { start: challengeWeekStart, end: addDaysYmd(challengeWeekStart, 6) };
   var challengeDates = getDatesInRange(challengeWeekBounds.start, challengeWeekBounds.end);
@@ -2856,12 +3282,66 @@ export default function App() {
     });
   }
 
-  var tvWeekStart = weekStartMonday(TODAY);
-  var tvWeekEnd = addDaysYmd(tvWeekStart, 6);
-  var tvWeekDates = getDatesInRange(tvWeekStart, tvWeekEnd);
-  var tvWeekDisplayLabel = "This week · " + formatChallengeWeekTabLabel(tvWeekStart, tvWeekEnd);
+  var tvThisWeekMon = weekStartMonday(TODAY);
+  var tvThisMonthStart = monthStart();
+  var tvIsMonth = tvPeriod === "month";
+  var tvRangeDates;
+  var tvRangePrefix;
+  var tvRangeDetail;
+  if (tvIsMonth) {
+    var tvMonthAll = monthDateRange(tvMonthAnchor);
+    var tvMonthIsCurrent = tvMonthAnchor === tvThisMonthStart;
+    tvRangeDates = tvMonthAll.filter(function (d) {
+      return tvMonthIsCurrent ? d <= TODAY : true;
+    });
+    tvRangeDetail = formatTvMonthLabel(tvMonthAnchor);
+    tvRangePrefix = tvMonthIsCurrent ? "This month" : "Past month";
+  } else {
+    var tvWs = tvWeekAnchor;
+    var tvWe = addDaysYmd(tvWs, 6);
+    var tvWeekIsCurrent = tvWs === tvThisWeekMon;
+    tvRangeDates = getDatesInRange(tvWs, tvWe);
+    if (tvWeekIsCurrent) {
+      tvRangeDates = tvRangeDates.filter(function (d) {
+        return d <= TODAY;
+      });
+    }
+    tvRangeDetail = formatChallengeWeekTabLabel(tvWs, tvWe);
+    tvRangePrefix = tvWeekIsCurrent ? "This week" : "Past week";
+  }
+  var tvRangeLabel = tvRangePrefix + " · " + tvRangeDetail;
+  var tvSelectedPeriodKey = (tvIsMonth ? "m-" : "w-") + (tvIsMonth ? tvMonthAnchor : tvWeekAnchor);
+  var tvWeekPickerOptions = [];
+  for (var _tvwi = 0; _tvwi < CHALLENGE_WEEK_HISTORY; _tvwi++) {
+    var _tvmon = addDaysYmd(tvThisWeekMon, -7 * _tvwi);
+    var _tvend = addDaysYmd(_tvmon, 6);
+    tvWeekPickerOptions.push({
+      key: "w-" + _tvmon,
+      kind: "week",
+      anchor: _tvmon,
+      label: formatChallengeWeekTabLabel(_tvmon, _tvend),
+    });
+  }
+  var tvMonthPickerOptions = [];
+  var _tvmaCur = tvThisMonthStart;
+  for (var _tvmi = 0; _tvmi < TV_MONTH_HISTORY; _tvmi++) {
+    tvMonthPickerOptions.push({
+      key: "m-" + _tvmaCur,
+      kind: "month",
+      anchor: _tvmaCur,
+      label: formatTvMonthLabel(_tvmaCur),
+    });
+    _tvmaCur = priorMonthAnchor(_tvmaCur);
+  }
+  var tvMvpAnchor = tvIsMonth
+    ? tvMonthAnchor === tvThisMonthStart
+      ? TODAY
+      : monthDateRange(tvMonthAnchor)[monthDateRange(tvMonthAnchor).length - 1]
+    : tvWeekAnchor === tvThisWeekMon
+      ? TODAY
+      : addDaysYmd(tvWeekAnchor, 6);
   var tvMarketTitle = isRegion(selM) ? "All Offices" : data.markets[selM] ? data.markets[selM].name : "Market";
-  /** TV knockers: this calendar week only; include reps with any week activity (not doors-only gate). */
+  /** TV knockers: selected period; include reps with any activity (not doors-only gate). */
   var tvKnockersSorted = [];
   if (tvMode) {
     scopedActiveReps(data, selM).forEach(function (p) {
@@ -2869,7 +3349,7 @@ export default function App() {
         rep = p[1];
       var mkt = data.markets[rep.marketId];
       if (!mkt) return;
-      var s = getRangeStats(data, rid, tvWeekDates);
+      var s = getRangeStats(data, rid, tvRangeDates);
       if (s.days === 0) return;
       if (s.doorsKnocked === 0 && s.setsSet === 0 && s.convosHad === 0) return;
       tvKnockersSorted.push({
@@ -2899,7 +3379,7 @@ export default function App() {
         rep = p[1];
       var mkt = data.markets[rep.marketId];
       if (!mkt) return;
-      var s = getRangeStats(data, rid, tvWeekDates);
+      var s = getRangeStats(data, rid, tvRangeDates);
       var mSG = getMonthSelfGens(data, rid, endDate);
       tvClosersSorted.push({
         rid: rid,
@@ -2943,24 +3423,25 @@ export default function App() {
       streak: r.streak,
     };
   });
-  var tvMvpWeek = tvMode && selM ? weeklyMVP(data, selM, TODAY) : null;
+  var tvMvp = tvMode && selM ? (tvIsMonth ? monthlyMVP(data, selM, tvMvpAnchor) : weeklyMVP(data, selM, tvMvpAnchor)) : null;
   var tvMarketCard = null;
   if (tvMode && selM) {
     if (!isRegion(selM)) {
       tvMarketCard = {
         title: data.markets[selM] ? data.markets[selM].name : "Market",
         region: false,
-        st: aggregateMarketChallenge(data, selM, tvWeekDates),
+        st: aggregateMarketChallenge(data, selM, tvRangeDates),
       };
     } else {
-      var tvReg = { doors: 0, sets: 0, closes: 0, convos: 0, appts: 0, reps: 0 };
+      var tvReg = { doors: 0, sets: 0, closes: 0, convos: 0, appts: 0, revenue: 0, reps: 0 };
       mIds.forEach(function (mid) {
-        var st = aggregateMarketChallenge(data, mid, tvWeekDates);
+        var st = aggregateMarketChallenge(data, mid, tvRangeDates);
         tvReg.doors += st.doors;
         tvReg.sets += st.sets;
         tvReg.closes += st.closes;
         tvReg.convos += st.convos;
         tvReg.appts += st.appts;
+        tvReg.revenue += st.revenue;
         tvReg.reps += st.reps;
       });
       tvReg.d2c = tvReg.doors > 0 ? pct(tvReg.convos, tvReg.doors) : 0;
@@ -2975,8 +3456,9 @@ export default function App() {
   }
   var tvChallengeBlocks = [];
   if (tvMode && mIds.length >= 2) {
-    var tvChallengeMon = weekStartMonday(TODAY);
-    var tvChallengeDates = getDatesInRange(tvChallengeMon, addDaysYmd(tvChallengeMon, 6));
+    var tvMonthEndDay = monthDateRange(tvMonthAnchor)[monthDateRange(tvMonthAnchor).length - 1];
+    var tvChallengeMon = tvIsMonth ? weekStartMonday(tvMonthEndDay) : tvWeekAnchor;
+    var tvChallengeDates = tvIsMonth ? tvRangeDates : getDatesInRange(tvWeekAnchor, addDaysYmd(tvWeekAnchor, 6));
     var tvChallengeRound = challengeWeekRoundIndex(tvChallengeMon);
     var tvPairsAll = officeChallengePairs(mIds, tvChallengeRound);
     var tvPairsFiltered =
@@ -2985,7 +3467,7 @@ export default function App() {
             return cp.b === null ? cp.a === selM : cp.a === selM || cp.b === selM;
           })
         : tvPairsAll;
-    var tvPresentChallengeWeek = tvChallengeMon === challengeThisMonday;
+    var tvPresentChallenge = tvIsMonth ? tvMonthAnchor === tvThisMonthStart : tvWeekAnchor === tvThisWeekMon;
     tvChallengeBlocks = tvPairsFiltered.map(function (pair) {
       var key = pair.b === null ? "bye-" + pair.a : pair.a + "-" + pair.b;
       if (pair.b === null) {
@@ -3002,10 +3484,10 @@ export default function App() {
       var winB = stB.closes > stA.closes;
       var bannerText;
       if (tie) {
-        bannerText = tvPresentChallengeWeek ? "Tied on closes" : "Finished tied on closes";
+        bannerText = tvPresentChallenge ? "Tied on closes" : "Finished tied on closes";
       } else {
         var wname = winA ? data.markets[pair.a].name : data.markets[pair.b].name;
-        bannerText = tvPresentChallengeWeek ? wname + " leads" : wname + " won";
+        bannerText = tvPresentChallenge ? wname + " leads" : wname + " won";
       }
       return {
         key: key,
@@ -3777,7 +4259,31 @@ export default function App() {
           regionLabel={"Jake's Region"}
           marketName={tvMarketTitle}
           officeName={officeScopeTitle}
-          rangeLabel={tvWeekDisplayLabel}
+          rangePrefix={tvRangePrefix}
+          rangeDetail={tvRangeDetail}
+          rangeLabel={tvRangeLabel}
+          period={tvPeriod}
+          selectedPeriodKey={tvSelectedPeriodKey}
+          weekPickerOptions={tvWeekPickerOptions}
+          monthPickerOptions={tvMonthPickerOptions}
+          onSelectWeek={function () {
+            setTvPeriod("week");
+          }}
+          onSelectMonth={function () {
+            setTvPeriod("month");
+          }}
+          onResetToPresentWeek={function () {
+            setTvPeriod("week");
+            setTvWeekAnchor(weekStartMonday(TODAY));
+          }}
+          onResetToPresentMonth={function () {
+            setTvPeriod("month");
+            setTvMonthAnchor(monthStart());
+          }}
+          onPeriodPick={function (opt) {
+            if (opt.kind === "week") setTvWeekAnchor(opt.anchor);
+            else setTvMonthAnchor(opt.anchor);
+          }}
           isRegionScope={isRegion(selM)}
           onSelectRegion={function () {
             setSelM(REGION_KEY);
@@ -3785,7 +4291,7 @@ export default function App() {
           onSelectMarket={function () {
             if (isRegion(selM) && mIds.length) setSelM(mIds[0]);
           }}
-          mvpWeek={tvMvpWeek}
+          mvp={tvMvp}
           marketCard={tvMarketCard}
           knockerRows={tvKnockerRows}
           closerRows={tvCloserRows}
@@ -4120,6 +4626,44 @@ export default function App() {
             </Card>
           ) : (
             <div style={{ paddingBottom: 96 }}>
+              {kpiRemoteBanner ? (
+                <div
+                  style={{
+                    marginBottom: 12,
+                    padding: "10px 14px",
+                    background: "#FFF8EE",
+                    border: "1px solid #FFE0B2",
+                    borderRadius: 10,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: "#8B5A00",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 10,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <span>{kpiRemoteBanner}</span>
+                  <button
+                    type="button"
+                    onClick={function () {
+                      setKpiRemoteBanner("");
+                    }}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: "#8B5A00",
+                      cursor: "pointer",
+                      padding: 0,
+                    }}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              ) : null}
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
                 <h2 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>Enter KPIs</h2>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
@@ -4190,13 +4734,13 @@ export default function App() {
                           {fields.map(function (fld) {
                             return (
                               <div key={fld.key} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-                                <span style={{ fontSize: 9, color: "#8E8E93", fontWeight: 600, textTransform: "uppercase" }}>{fld.label}</span>
+                                <span style={{ fontSize: 9, color: "#8E8E93", fontWeight: 600, textTransform: "uppercase" }}>{fld.key === "revenue" ? revenueLabel(data) : fld.label}</span>
                                 <NI
                                   value={(kpiIn[rid] && kpiIn[rid][fld.key]) || ""}
                                   onChange={function (e) {
                                     var val = e.target.value;
                                     var fk = fld.key;
-                                    setKpiIn(function (prev) {
+                                    patchKpiIn(rid, function (prev) {
                                       var n = { ...prev };
                                       n[rid] = { ...n[rid] };
                                       n[rid][fk] = val;
@@ -4219,7 +4763,7 @@ export default function App() {
                                     value={row.closerId || ""}
                                     onChange={function (e) {
                                       var v = e.target.value;
-                                      setKpiIn(function (prev) {
+                                      patchKpiIn(rid, function (prev) {
                                         var n = { ...prev };
                                         var rowB = { ...n[rid] };
                                         var cf = (rowB.creditFails || []).map(function (x, j) {
@@ -4244,7 +4788,7 @@ export default function App() {
                                   <Btn
                                     v="ghost"
                                     onClick={function () {
-                                      setKpiIn(function (prev) {
+                                      patchKpiIn(rid, function (prev) {
                                         var n = { ...prev };
                                         var rowB = { ...n[rid] };
                                         var cf = (rowB.creditFails || []).filter(function (_, j) {
@@ -4265,7 +4809,7 @@ export default function App() {
                             <Btn
                               v="secondary"
                               onClick={function () {
-                                setKpiIn(function (prev) {
+                                patchKpiIn(rid, function (prev) {
                                   var n = { ...prev };
                                   var rowB = { ...n[rid] };
                                   var cf = [...(rowB.creditFails || [])];
@@ -4305,7 +4849,7 @@ export default function App() {
                               value={kpiIn[rid].apptSources || ""}
                               onChange={function (e) {
                                 var val = e.target.value;
-                                setKpiIn(function (prev) {
+                                patchKpiIn(rid, function (prev) {
                                   var n = { ...prev };
                                   n[rid] = { ...n[rid], apptSources: val };
                                   return n;
@@ -4331,9 +4875,7 @@ export default function App() {
                           value={kpiNotes[rid] || ""}
                           onChange={function (e) {
                             var val = e.target.value;
-                            setKpiNotes(function (prev) {
-                              return { ...prev, [rid]: val };
-                            });
+                            patchKpiNotes(rid, e.target.value);
                           }}
                           placeholder="Notes..."
                           style={{
@@ -4361,14 +4903,14 @@ export default function App() {
                         {K_FIELDS.map(function (f) {
                           return (
                             <th key={f.key} style={ths}>
-                              {f.label}
+                              {f.key === "revenue" ? revenueLabel(data) : f.label}
                             </th>
                           );
                         })}
                         {C_FIELDS.map(function (f) {
                           return (
                             <th key={"c_" + f.key} style={ths}>
-                              {"C:" + f.label}
+                              {"C:" + (f.key === "revenue" ? revenueLabel(data) : f.label)}
                             </th>
                           );
                         })}
@@ -4399,7 +4941,7 @@ export default function App() {
                                       onChange={function (e) {
                                         var val = e.target.value,
                                           fk = fld.key;
-                                        setKpiIn(function (prev) {
+                                        patchKpiIn(rid, function (prev) {
                                           var n = { ...prev };
                                           n[rid] = { ...n[rid] };
                                           n[rid][fk] = val;
@@ -4423,7 +4965,7 @@ export default function App() {
                                       onChange={function (e) {
                                         var val = e.target.value,
                                           fk = fld.key;
-                                        setKpiIn(function (prev) {
+                                        patchKpiIn(rid, function (prev) {
                                           var n = { ...prev };
                                           n[rid] = { ...n[rid] };
                                           n[rid][fk] = val;
@@ -4444,7 +4986,7 @@ export default function App() {
                                   value={(kpiIn[rid] && kpiIn[rid].creditFailCount) || "0"}
                                   onChange={function (e) {
                                     var val = e.target.value;
-                                    setKpiIn(function (prev) {
+                                    patchKpiIn(rid, function (prev) {
                                       var n = { ...prev };
                                       var rowB = { ...n[rid] };
                                       var nc = parseInt(val, 10) || 0;
@@ -4469,7 +5011,7 @@ export default function App() {
                                   value={(kpiIn[rid] && kpiIn[rid].creditFailAssignCloser) || ""}
                                   onChange={function (e) {
                                     var v = e.target.value;
-                                    setKpiIn(function (prev) {
+                                    patchKpiIn(rid, function (prev) {
                                       var n = { ...prev };
                                       var rowB = { ...n[rid] };
                                       rowB.creditFailAssignCloser = v;
@@ -4499,9 +5041,7 @@ export default function App() {
                                 value={kpiNotes[rid] || ""}
                                 onChange={function (e) {
                                   var val = e.target.value;
-                                  setKpiNotes(function (prev) {
-                                    return { ...prev, [rid]: val };
-                                  });
+                                  patchKpiNotes(rid, e.target.value);
                                 }}
                                 style={{ width: "100%", minWidth: 72, fontSize: 11, padding: "4px 6px", border: "1px solid #E5E5EA", borderRadius: 6 }}
                               />
@@ -4538,7 +5078,7 @@ export default function App() {
               </Card>
             ) : null}
             <div style={{ display: "flex", gap: 4, marginBottom: 14, flexWrap: "wrap" }}>
-              {[["doors", "Doors"], ["convos", "Convos"], ["sets", "Sets"], ["d2c", "D2C%"], ["c2s", "C2S%"]].map(function (x) {
+              {[["doors", "Doors"], ["convos", "Convos"], ["sets", "Sets"], ["revenue", revenueLabel(data)], ["d2c", "D2C%"], ["c2s", "C2S%"], ["cadRate", "CAD%"]].map(function (x) {
                 return (
                   <Btn
                     key={x[0]}
@@ -4561,8 +5101,8 @@ export default function App() {
                     (showBoardMarketCol ? r.market + " · " : "") +
                     (r.role === "closer" ? "Closer" : "Knocker") +
                     (r.streak > 0 ? " · 🔥" + r.streak + "d" : ""),
-                  val: lbSort === "d2c" || lbSort === "c2s" ? r[lbSort] + "%" : r[lbSort],
-                  metric: { doors: "Doors", convos: "Convos", sets: "Sets", d2c: "D2C%", c2s: "C2S%" }[lbSort],
+                  val: lbSort === "d2c" || lbSort === "c2s" || lbSort === "cadRate" ? r[lbSort] + "%" : lbSort === "revenue" ? fmtRevenue(r.revenue) : r[lbSort],
+                  metric: { doors: "Doors", convos: "Convos", sets: "Sets", revenue: revenueLabel(data), d2c: "D2C%", c2s: "C2S%", cadRate: "CAD%" }[lbSort],
                 };
               })}
             />
@@ -4572,7 +5112,7 @@ export default function App() {
                   <tr>
                     {["#", "Rep"]
                       .concat(showBoardMarketCol ? ["Market"] : [])
-                      .concat(["", "Strk", "Doors", "Convos", "Sets", "D2C%"])
+                      .concat(["", "Strk", "Doors", revenueLabel(data), "Convos", "Sets", "D2C%", "CAD%"])
                       .map(function (h) {
                         return (
                           <th key={h} style={{ ...ths, textAlign: h === "Rep" || h === "Market" || h === "" ? "left" : "center" }}>
@@ -4605,15 +5145,17 @@ export default function App() {
                         <td style={{ padding: "10px 2px" }}>{r.role === "closer" ? <RoleBadge role="closer" /> : null}</td>
                         <td style={{ textAlign: "center", padding: "10px 6px", fontWeight: 600, fontSize: 11 }}>{r.streak > 0 ? "🔥 " + r.streak : "—"}</td>
                         <td style={{ textAlign: "center", padding: "10px 6px", fontWeight: 600 }}>{r.doors}</td>
+                        <td style={{ textAlign: "center", padding: "10px 6px", fontWeight: 600, color: "#34C759" }}>{fmtRevenue(r.revenue)}</td>
                         <td style={{ textAlign: "center", padding: "10px 6px", fontWeight: 600 }}>{r.convos}</td>
                         <td style={{ textAlign: "center", padding: "10px 6px", fontWeight: 600 }}>{r.sets}</td>
                         <td style={{ textAlign: "center", padding: "10px 6px", fontWeight: 600, color: r.d2c > 40 ? "#34C759" : "#FF9500" }}>{r.d2c + "%"}</td>
+                        <td style={{ textAlign: "center", padding: "10px 6px", fontWeight: 600, color: r.cadRate > 30 ? "#FF3B30" : "#8E8E93" }}>{r.cadRate + "%"}</td>
                       </tr>
                     );
                   })}
                   {knockerLB.length === 0 && (
                     <tr>
-                      <td colSpan={showBoardMarketCol ? 9 : 8} style={{ padding: 20, textAlign: "center", color: "#C7C7CC" }}>
+                      <td colSpan={showBoardMarketCol ? 11 : 10} style={{ padding: 20, textAlign: "center", color: "#C7C7CC" }}>
                         No knocker data.
                       </td>
                     </tr>
@@ -4647,7 +5189,7 @@ export default function App() {
               </Card>
             ) : null}
             <div style={{ display: "flex", gap: 4, marginBottom: 14, flexWrap: "wrap" }}>
-              {[["closes", "Closes"], ["closeRate", "Close%"], ["selfGens", "Self-Gens"], ["hours", "Hours"]].map(function (x) {
+              {[["closes", "Closes"], ["revenue", revenueLabel(data)], ["closeRate", "Close%"], ["selfGens", "Self-Gens"], ["hours", "Hours"]].map(function (x) {
                 return (
                   <Btn
                     key={x[0]}
@@ -4664,12 +5206,12 @@ export default function App() {
             </div>
             <Podium
               items={closerLB.slice(0, 3).map(function (r) {
-                var vm = { closes: r.closes, closeRate: r.closeRate + "%", selfGens: r.monthSelfGens, hours: r.hours };
+                var vm = { closes: r.closes, revenue: fmtRevenue(r.revenue), closeRate: r.closeRate + "%", selfGens: r.monthSelfGens, hours: r.hours };
                 return {
                   name: r.name,
                   sub: (showBoardMarketCol ? r.market : "Closer") + (r.streak > 0 ? " · 🔥" + r.streak + "d" : ""),
                   val: vm[clSort],
-                  metric: { closes: "Closes", closeRate: "Close%", selfGens: "Mo SG", hours: "Hours" }[clSort],
+                  metric: { closes: "Closes", revenue: revenueLabel(data), closeRate: "Close%", selfGens: "Mo SG", hours: "Hours" }[clSort],
                 };
               })}
             />
@@ -4679,7 +5221,7 @@ export default function App() {
                   <tr>
                     {["#", "Rep"]
                       .concat(showBoardMarketCol ? ["Market"] : [])
-                      .concat(["Strk", "Appts", "Closed", "Close%", "CAD%", "Hrs", "Hrs/Day", "Mo SG"])
+                      .concat(["Strk", "Appts Ran", "Sets", "Closes", revenueLabel(data), "Close%", "CAD%", "Hrs", "Hrs/Day", "Mo SG"])
                       .map(function (h) {
                         return (
                           <th key={h} style={{ ...ths, textAlign: h === "Rep" || h === "Market" ? "left" : "center" }}>
@@ -4711,7 +5253,9 @@ export default function App() {
                         ) : null}
                         <td style={{ textAlign: "center", padding: "10px 6px", fontWeight: 600, fontSize: 11 }}>{r.streak > 0 ? "🔥 " + r.streak : "—"}</td>
                         <td style={{ textAlign: "center", padding: "10px 6px", fontWeight: 600 }}>{r.apptsRan}</td>
+                        <td style={{ textAlign: "center", padding: "10px 6px", fontWeight: 600 }}>{r.sets}</td>
                         <td style={{ textAlign: "center", padding: "10px 6px", fontWeight: 700, color: "#34C759" }}>{r.closes}</td>
+                        <td style={{ textAlign: "center", padding: "10px 6px", fontWeight: 600, color: "#34C759" }}>{fmtRevenue(r.revenue)}</td>
                         <td style={{ textAlign: "center", padding: "10px 6px", fontWeight: 600 }}>{r.closeRate + "%"}</td>
                         <td style={{ textAlign: "center", padding: "10px 6px", fontWeight: 600, color: r.cadRate > 30 ? "#FF3B30" : "#8E8E93" }}>{r.cadRate + "%"}</td>
                         <td style={{ textAlign: "center", padding: "10px 6px", fontWeight: 600, color: r.hours < 5 * r.days ? "#FF3B30" : "#34C759" }}>{r.hours}</td>
@@ -4722,7 +5266,7 @@ export default function App() {
                   })}
                   {closerLB.length === 0 && (
                     <tr>
-                      <td colSpan={showBoardMarketCol ? 11 : 10} style={{ padding: 20, textAlign: "center", color: "#C7C7CC" }}>
+                      <td colSpan={showBoardMarketCol ? 13 : 12} style={{ padding: 20, textAlign: "center", color: "#C7C7CC" }}>
                         No closer data.
                       </td>
                     </tr>
@@ -5102,6 +5646,83 @@ export default function App() {
           </div>
         )}
 
+        {tab === "revenue" && (
+          <div>
+            <h2 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 4px 0" }}>Office {revenueLabel(data)}</h2>
+            <p style={{ fontSize: 12, color: "#8E8E93", margin: "0 0 16px 0" }}>
+              {"Ranked by " + revenueLabel(data).toLowerCase() + " · " + numDays + " day" + (numDays > 1 ? "s" : "")}
+            </p>
+            <Podium
+              items={revenueOfficeData.slice(0, 3).map(function (m) {
+                return { name: m.name, sub: m.reps + " rep" + (m.reps !== 1 ? "s" : ""), val: fmtRevenue(m.revenue), metric: revenueLabel(data) };
+              })}
+            />
+            {revenueOfficeData.map(function (m, i) {
+              var medal = i < 3 ? ["🥇", "🥈", "🥉"][i] : "";
+              var isSelected = selM && !isRegion(selM) && selM === m.id;
+              return (
+                <Card
+                  key={m.id}
+                  style={{ cursor: "pointer", ...(isSelected ? { border: "2px solid #007AFF", background: "#F0F7FF" } : {}) }}
+                  bc={!isSelected && i < 3 ? ["#FFD700", "#C0C0C0", "#CD7F32"][i] : undefined}
+                >
+                  <div
+                    onClick={function () {
+                      setSelM(m.id);
+                      setTab("dashboard");
+                    }}
+                    style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}
+                  >
+                    <span style={{ fontSize: medal ? 24 : 16, width: 32, textAlign: "center", fontWeight: 800, color: medal ? "#1C1C1E" : "#C7C7CC" }}>{medal || i + 1}</span>
+                    <div style={{ flex: 1, minWidth: 100 }}>
+                      <div style={{ fontWeight: 800, fontSize: 17 }}>{m.name}</div>
+                      <div style={{ fontSize: 12, color: "#8E8E93" }}>{m.reps + " active rep" + (m.reps !== 1 ? "s" : "")}</div>
+                    </div>
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: "#34C759" }}>{fmtRevenue(m.revenue)}</div>
+                      <div style={{ fontSize: 9, color: "#8E8E93", fontWeight: 600, textTransform: "uppercase" }}>{revenueLabel(data)}</div>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+            <Card style={{ marginTop: 16 }}>
+              <SL>REV - Current Month</SL>
+              <ResponsiveContainer width="100%" height={260}>
+                <LineChart data={revenueMonthChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#F2F2F7" />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#8E8E93" }} interval={0} angle={-45} textAnchor="end" height={50} />
+                  <YAxis tick={{ fontSize: 10, fill: "#8E8E93" }} tickFormatter={function (v) { return "$" + v.toLocaleString(); }} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: 10, fontSize: 12, border: "none", boxShadow: shL }}
+                    formatter={function (v) { return fmtRevenue(v); }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  {mIds.map(function (mid, idx) {
+                    var mkt = data.markets[mid];
+                    var name = mkt ? mkt.name : mid;
+                    var isSelected = selM && !isRegion(selM) && selM === mid;
+                    var color = revenueChartColors[idx % revenueChartColors.length];
+                    return (
+                      <Line
+                        key={mid}
+                        type="monotone"
+                        dataKey={mid}
+                        name={name}
+                        stroke={color}
+                        strokeWidth={isSelected ? 3 : 1.5}
+                        strokeOpacity={isSelected || isRegion(selM) || !selM ? 1 : 0.35}
+                        dot={{ r: isSelected ? 4 : 2 }}
+                        connectNulls
+                      />
+                    );
+                  })}
+                </LineChart>
+              </ResponsiveContainer>
+            </Card>
+          </div>
+        )}
+
         {tab === "manage" && (
           <div>
             <h2 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 14px 0" }}>Manage</h2>
@@ -5404,9 +6025,10 @@ export default function App() {
               fontWeight: 700,
               borderRadius: 999,
               boxShadow: shL,
+              opacity: kpiSaving ? 0.7 : 1,
             }}
           >
-            Save changes
+            {kpiSaving ? "Saving…" : "Save changes"}
           </Btn>
         </div>
       ) : null}
@@ -5631,14 +6253,14 @@ export default function App() {
                   <tr>
                     <th style={ths}>Date</th>
                     {profileRep.role === "closer"
-                      ? ["Appts", "Closed", "CAD", "Conv", "Doors", "SG C"].map(function (h) {
+                      ? ["Appts Ran", "CAD", "Closes", "Conv", "Doors", "SG C"].map(function (h) {
                           return (
                             <th key={h} style={ths}>
                               {h}
                             </th>
                           );
                         })
-                      : ["Doors", "Conv", "Sets", "Appt", "Close", "CF"].map(function (h) {
+                      : ["Appts Ran", "Closes", "Conv", "Doors", "Sets", "CF"].map(function (h) {
                           return (
                             <th key={h} style={ths}>
                               {h}
@@ -5667,11 +6289,11 @@ export default function App() {
                             </>
                           ) : (
                             <>
-                              <td style={{ textAlign: "center", padding: 6 }}>{k ? k.doorsKnocked || 0 : "—"}</td>
-                              <td style={{ textAlign: "center", padding: 6 }}>{k ? k.convosHad || 0 : "—"}</td>
-                              <td style={{ textAlign: "center", padding: 6 }}>{k ? k.setsSet || 0 : "—"}</td>
                               <td style={{ textAlign: "center", padding: 6 }}>{k ? k.apptsRan || 0 : "—"}</td>
                               <td style={{ textAlign: "center", padding: 6 }}>{k ? k.closes || 0 : "—"}</td>
+                              <td style={{ textAlign: "center", padding: 6 }}>{k ? k.convosHad || 0 : "—"}</td>
+                              <td style={{ textAlign: "center", padding: 6 }}>{k ? k.doorsKnocked || 0 : "—"}</td>
+                              <td style={{ textAlign: "center", padding: 6 }}>{k ? k.setsSet || 0 : "—"}</td>
                               <td style={{ textAlign: "center", padding: 6 }}>{k && k.creditFails ? k.creditFails.length : "—"}</td>
                             </>
                           )}

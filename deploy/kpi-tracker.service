@@ -1,0 +1,22 @@
+[Unit]
+Description=KPI Tracker (Vite dev server)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=500
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/root/github/kpi_tracker
+Environment=NODE_ENV=development
+ExecStart=/root/github/kpi_tracker/node_modules/.bin/vite --host 127.0.0.1 --port 5173
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kpi-tracker
+
+[Install]
+WantedBy=multi-user.target
