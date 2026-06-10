@@ -1,13 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  GoogleAuthProvider,
-  getRedirectResult,
   onAuthStateChanged,
-  signInWithPopup,
-  signInWithRedirect,
   signOut,
-} from "firebase/auth";
-import {
+  sendEmailOtp,
+  verifyEmailOtp,
   deleteField,
   doc,
   FieldPath,
@@ -16,8 +12,9 @@ import {
   runTransaction,
   setDoc,
   updateDoc,
-} from "firebase/firestore";
-import { auth, db } from "./firebase.js";
+  auth,
+  db,
+} from "./firebase.js";
 import notifPng from "./assets/notif.png";
 import TVView from "./TVView.jsx";
 import {
@@ -1791,10 +1788,7 @@ export default function App() {
   }, []);
 
   useEffect(function () {
-    // Complete redirect sign-in flows (Safari / blocked popups fallback).
-    getRedirectResult(auth).catch(function (e) {
-      flash(authErrorMessage(e));
-    });
+    // Email one-time-code sign-in completes in-app; no redirect handling needed.
   }, []);
 
   useEffect(function () {
@@ -1925,34 +1919,65 @@ export default function App() {
     setData(toSave);
     save(toSave);
   }, [user]);
-  function doSignIn() {
-    var provider = new GoogleAuthProvider();
-    provider.setCustomParameters({ prompt: "select_account" });
-    return signInWithPopup(auth, provider).catch(function (e) {
-      var code = e && e.code ? String(e.code) : "";
-      var shouldRedirect =
-        code === "auth/popup-blocked" ||
-        code === "auth/operation-not-supported-in-this-environment";
-      flash(authErrorMessage(e));
-      if (shouldRedirect) return signInWithRedirect(auth, provider);
-      throw e;
-    });
-  }
-  /** Clears Firebase session, then opens Google sign-in so the user can pick another account. */
-  function trySwitchGoogleAccount() {
-    return signOut(auth)
-      .catch(function () {})
+  var [emailInput, setEmailInput] = useState("");
+  var [otpSent, setOtpSent] = useState(false);
+  var [otpEmail, setOtpEmail] = useState("");
+  var [otpCode, setOtpCode] = useState("");
+  var [otpSending, setOtpSending] = useState(false);
+  var [otpVerifying, setOtpVerifying] = useState(false);
+
+  function startEmailSignIn() {
+    var em = normalizeEmail(emailInput);
+    if (!em || em.indexOf("@") < 0) {
+      flash("Enter a valid email address.");
+      return;
+    }
+    setOtpSending(true);
+    sendEmailOtp(em)
       .then(function () {
-        return new Promise(function (resolve) {
-          setTimeout(resolve, 150);
-        });
+        setOtpEmail(em);
+        setOtpSent(true);
+        flash("We emailed you a 6-digit code.", 4000);
+      })
+      .catch(function (e) {
+        flash((e && e.message) || "Could not send the code.");
       })
       .then(function () {
-        return doSignIn();
+        setOtpSending(false);
+      });
+  }
+  function completeEmailSignIn() {
+    var code = String(otpCode || "").trim();
+    if (code.length < 6) {
+      flash("Enter the 6-digit code from your email.");
+      return;
+    }
+    setOtpVerifying(true);
+    verifyEmailOtp(otpEmail, code)
+      .then(function () {
+        setOtpCode("");
+        setOtpSent(false);
+        setEmailInput("");
+      })
+      .catch(function (e) {
+        flash((e && e.message) || "That code didn't work. Try again.");
+      })
+      .then(function () {
+        setOtpVerifying(false);
+      });
+  }
+  function resetEmailSignIn() {
+    return signOut()
+      .catch(function () {})
+      .then(function () {
+        setOtpSent(false);
+        setOtpCode("");
+        setOtpEmail("");
+        setEmailInput("");
       });
   }
   function doSignOut() {
-    return signOut(auth);
+    return signOut();
   }
   function flash(m, ms) {
     setToast(m);
@@ -2602,21 +2627,57 @@ export default function App() {
   if (!user)
     return (
       <div style={{ minHeight: "100vh", background: "#F2F2F7", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-        <div style={{ width: "100%", maxWidth: 520 }}>
+        <div style={{ width: "100%", maxWidth: 420 }}>
           <div style={{ textAlign: "center", fontWeight: 900, fontSize: 26, marginBottom: 8, color: "#1C1C1E" }}>KPI Tracker</div>
           <div style={{ textAlign: "center", color: "#8E8E93", fontWeight: 600, marginBottom: 18 }}>
-            Sign in with Google to continue.
+            {otpSent ? "Enter the 6-digit code we emailed to " + otpEmail + "." : "Sign in with your email to continue."}
           </div>
-          <div style={{ display: "flex", justifyContent: "center" }}>
-            <Btn
-              onClick={function () {
-                doSignIn().catch(function () {});
-              }}
-              style={{ padding: "12px 18px", borderRadius: 12, fontSize: 14 }}
-            >
-              Sign in with Google
-            </Btn>
-          </div>
+          {!otpSent ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <input
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                placeholder="you@company.com"
+                value={emailInput}
+                onChange={function (e) { setEmailInput(e.target.value); }}
+                onKeyDown={function (e) { if (e.key === "Enter") startEmailSignIn(); }}
+                style={{ padding: "12px 14px", borderRadius: 12, border: "1px solid #E5E5EA", fontSize: 15, width: "100%", boxSizing: "border-box" }}
+              />
+              <Btn
+                onClick={function () { startEmailSignIn(); }}
+                style={{ padding: "12px 18px", borderRadius: 12, fontSize: 14, width: "100%", opacity: otpSending ? 0.6 : 1 }}
+              >
+                {otpSending ? "Sending…" : "Email me a code"}
+              </Btn>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="123456"
+                value={otpCode}
+                onChange={function (e) { setOtpCode(e.target.value.replace(/[^0-9]/g, "").slice(0, 6)); }}
+                onKeyDown={function (e) { if (e.key === "Enter") completeEmailSignIn(); }}
+                style={{ padding: "12px 14px", borderRadius: 12, border: "1px solid #E5E5EA", fontSize: 18, letterSpacing: 4, textAlign: "center", width: "100%", boxSizing: "border-box" }}
+              />
+              <Btn
+                onClick={function () { completeEmailSignIn(); }}
+                style={{ padding: "12px 18px", borderRadius: 12, fontSize: 14, width: "100%", opacity: otpVerifying ? 0.6 : 1 }}
+              >
+                {otpVerifying ? "Verifying…" : "Verify & sign in"}
+              </Btn>
+              <Btn
+                v="secondary"
+                onClick={function () { resetEmailSignIn(); }}
+                style={{ padding: "10px 18px", borderRadius: 12, fontSize: 13, width: "100%" }}
+              >
+                Use a different email
+              </Btn>
+            </div>
+          )}
           {toast ? (
             <div style={{ marginTop: 14, textAlign: "center", color: "#8E8E93", fontWeight: 600, fontSize: 12 }}>{toast}</div>
           ) : null}
@@ -2744,11 +2805,11 @@ export default function App() {
               <Btn
                 v="secondary"
                 onClick={function () {
-                  trySwitchGoogleAccount().catch(function () {});
+                  resetEmailSignIn().catch(function () {});
                 }}
                 style={{ padding: "12px 18px", borderRadius: 12, width: "100%" }}
               >
-                Choose a different Google account
+                Use a different email
               </Btn>
             </div>
           ) : null}
