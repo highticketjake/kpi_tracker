@@ -260,16 +260,22 @@ export async function signOut() {
   await supabase.auth.signOut();
 }
 
-// Email one-time-code sign-in.
-export async function sendEmailOtp(email) {
-  const res = await supabase.auth.signInWithOtp({ email: email, options: { shouldCreateUser: true } });
-  if (res.error) throw res.error;
-  return true;
-}
-export async function verifyEmailOtp(email, token) {
-  const res = await supabase.auth.verifyOtp({ email: email, token: token, type: "email" });
+// Email + password sign-in.
+export async function signInWithPassword(email, password) {
+  const res = await supabase.auth.signInWithPassword({ email: email, password: password });
   if (res.error) throw res.error;
   return mapUser(res.data ? res.data.user : null);
+}
+// Create an account with email + password. With "Confirm email" disabled in
+// Supabase, this returns an active session immediately and the auth listener
+// signs the user in. If confirmation is on, session is null until confirmed.
+export async function signUpWithPassword(email, password) {
+  const res = await supabase.auth.signUp({ email: email, password: password });
+  if (res.error) throw res.error;
+  return {
+    user: mapUser(res.data ? res.data.user : null),
+    hasSession: !!(res.data && res.data.session),
+  };
 }
 
 // Kept only so any leftover imports don't break; no longer used by the UI.

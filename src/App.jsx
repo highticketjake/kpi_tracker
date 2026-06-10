@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   onAuthStateChanged,
   signOut,
-  sendEmailOtp,
-  verifyEmailOtp,
+  signInWithPassword,
+  signUpWithPassword,
   deleteField,
   doc,
   FieldPath,
@@ -1920,60 +1920,56 @@ export default function App() {
     save(toSave);
   }, [user]);
   var [emailInput, setEmailInput] = useState("");
-  var [otpSent, setOtpSent] = useState(false);
-  var [otpEmail, setOtpEmail] = useState("");
-  var [otpCode, setOtpCode] = useState("");
-  var [otpSending, setOtpSending] = useState(false);
-  var [otpVerifying, setOtpVerifying] = useState(false);
+  var [pwInput, setPwInput] = useState("");
+  var [authBusy, setAuthBusy] = useState(false);
 
-  function startEmailSignIn() {
+  function doPasswordSignIn() {
     var em = normalizeEmail(emailInput);
+    var pw = String(pwInput || "");
     if (!em || em.indexOf("@") < 0) {
       flash("Enter a valid email address.");
       return;
     }
-    setOtpSending(true);
-    sendEmailOtp(em)
-      .then(function () {
-        setOtpEmail(em);
-        setOtpSent(true);
-        flash("We emailed you a 6-digit code.", 4000);
-      })
-      .catch(function (e) {
-        flash((e && e.message) || "Could not send the code.");
-      })
-      .then(function () {
-        setOtpSending(false);
-      });
-  }
-  function completeEmailSignIn() {
-    var code = String(otpCode || "").trim();
-    if (code.length < 6) {
-      flash("Enter the 6-digit code from your email.");
+    if (pw.length < 6) {
+      flash("Enter your password.");
       return;
     }
-    setOtpVerifying(true);
-    verifyEmailOtp(otpEmail, code)
+    setAuthBusy(true);
+    signInWithPassword(em, pw)
       .then(function () {
-        setOtpCode("");
-        setOtpSent(false);
-        setEmailInput("");
+        setPwInput("");
       })
       .catch(function (e) {
-        flash((e && e.message) || "That code didn't work. Try again.");
+        flash((e && e.message) || "Could not sign in. Check your email and password.");
       })
       .then(function () {
-        setOtpVerifying(false);
+        setAuthBusy(false);
       });
   }
-  function resetEmailSignIn() {
-    return signOut()
-      .catch(function () {})
+  function doPasswordSignUp() {
+    var em = normalizeEmail(emailInput);
+    var pw = String(pwInput || "");
+    if (!em || em.indexOf("@") < 0) {
+      flash("Enter a valid email address.");
+      return;
+    }
+    if (pw.length < 6) {
+      flash("Choose a password with at least 6 characters.");
+      return;
+    }
+    setAuthBusy(true);
+    signUpWithPassword(em, pw)
+      .then(function (r) {
+        setPwInput("");
+        if (r && !r.hasSession) {
+          flash("Account created — you can sign in now.", 4000);
+        }
+      })
+      .catch(function (e) {
+        flash((e && e.message) || "Could not create the account.");
+      })
       .then(function () {
-        setOtpSent(false);
-        setOtpCode("");
-        setOtpEmail("");
-        setEmailInput("");
+        setAuthBusy(false);
       });
   }
   function doSignOut() {
@@ -1990,7 +1986,7 @@ export default function App() {
     if (!user || !access) return;
     var email = normalizeEmail(user.email);
     if (!email) {
-      flash("Sign in with a Google account that has an email address.");
+      flash("Sign in with an email address.");
       return;
     }
     var reqs = access.accessRequests && typeof access.accessRequests === "object" ? access.accessRequests : {};
@@ -2630,54 +2626,41 @@ export default function App() {
         <div style={{ width: "100%", maxWidth: 420 }}>
           <div style={{ textAlign: "center", fontWeight: 900, fontSize: 26, marginBottom: 8, color: "#1C1C1E" }}>KPI Tracker</div>
           <div style={{ textAlign: "center", color: "#8E8E93", fontWeight: 600, marginBottom: 18 }}>
-            {otpSent ? "Enter the 6-digit code we emailed to " + otpEmail + "." : "Sign in with your email to continue."}
+            Sign in to continue.
           </div>
-          {!otpSent ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <input
-                type="email"
-                inputMode="email"
-                autoComplete="email"
-                placeholder="you@company.com"
-                value={emailInput}
-                onChange={function (e) { setEmailInput(e.target.value); }}
-                onKeyDown={function (e) { if (e.key === "Enter") startEmailSignIn(); }}
-                style={{ padding: "12px 14px", borderRadius: 12, border: "1px solid #E5E5EA", fontSize: 15, width: "100%", boxSizing: "border-box" }}
-              />
-              <Btn
-                onClick={function () { startEmailSignIn(); }}
-                style={{ padding: "12px 18px", borderRadius: 12, fontSize: 14, width: "100%", opacity: otpSending ? 0.6 : 1 }}
-              >
-                {otpSending ? "Sending…" : "Email me a code"}
-              </Btn>
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <input
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                placeholder="123456"
-                value={otpCode}
-                onChange={function (e) { setOtpCode(e.target.value.replace(/[^0-9]/g, "").slice(0, 6)); }}
-                onKeyDown={function (e) { if (e.key === "Enter") completeEmailSignIn(); }}
-                style={{ padding: "12px 14px", borderRadius: 12, border: "1px solid #E5E5EA", fontSize: 18, letterSpacing: 4, textAlign: "center", width: "100%", boxSizing: "border-box" }}
-              />
-              <Btn
-                onClick={function () { completeEmailSignIn(); }}
-                style={{ padding: "12px 18px", borderRadius: 12, fontSize: 14, width: "100%", opacity: otpVerifying ? 0.6 : 1 }}
-              >
-                {otpVerifying ? "Verifying…" : "Verify & sign in"}
-              </Btn>
-              <Btn
-                v="secondary"
-                onClick={function () { resetEmailSignIn(); }}
-                style={{ padding: "10px 18px", borderRadius: 12, fontSize: 13, width: "100%" }}
-              >
-                Use a different email
-              </Btn>
-            </div>
-          )}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <input
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              placeholder="you@company.com"
+              value={emailInput}
+              onChange={function (e) { setEmailInput(e.target.value); }}
+              style={{ padding: "12px 14px", borderRadius: 12, border: "1px solid #E5E5EA", fontSize: 15, width: "100%", boxSizing: "border-box" }}
+            />
+            <input
+              type="password"
+              autoComplete="current-password"
+              placeholder="Password"
+              value={pwInput}
+              onChange={function (e) { setPwInput(e.target.value); }}
+              onKeyDown={function (e) { if (e.key === "Enter") doPasswordSignIn(); }}
+              style={{ padding: "12px 14px", borderRadius: 12, border: "1px solid #E5E5EA", fontSize: 15, width: "100%", boxSizing: "border-box" }}
+            />
+            <Btn
+              onClick={function () { doPasswordSignIn(); }}
+              style={{ padding: "12px 18px", borderRadius: 12, fontSize: 14, width: "100%", opacity: authBusy ? 0.6 : 1 }}
+            >
+              {authBusy ? "Working…" : "Sign in"}
+            </Btn>
+            <Btn
+              v="secondary"
+              onClick={function () { doPasswordSignUp(); }}
+              style={{ padding: "10px 18px", borderRadius: 12, fontSize: 13, width: "100%", opacity: authBusy ? 0.6 : 1 }}
+            >
+              Create account
+            </Btn>
+          </div>
           {toast ? (
             <div style={{ marginTop: 14, textAlign: "center", color: "#8E8E93", fontWeight: 600, fontSize: 12 }}>{toast}</div>
           ) : null}
@@ -2805,11 +2788,11 @@ export default function App() {
               <Btn
                 v="secondary"
                 onClick={function () {
-                  resetEmailSignIn().catch(function () {});
+                  signOut().catch(function () {}).then(function () { setEmailInput(""); setPwInput(""); });
                 }}
                 style={{ padding: "12px 18px", borderRadius: 12, width: "100%" }}
               >
-                Use a different email
+                Sign out
               </Btn>
             </div>
           ) : null}
