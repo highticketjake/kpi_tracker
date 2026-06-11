@@ -8,3 +8,9 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Internal tool: keep it out of search engines entirely.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
