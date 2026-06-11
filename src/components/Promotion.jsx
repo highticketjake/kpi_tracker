@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { today } from "../lib/dates";
 import { promotionTrack } from "../lib/calc";
 import { Card, SectionTitle, Select } from "./ui";
@@ -38,7 +38,7 @@ export default function Promotion({ ctx }) {
       <Card className="p-3 overflow-x-auto">
         <table className="w-full text-sm min-w-[560px]">
           <thead>
-            <tr className="text-left text-[11px] uppercase tracking-wide text-gray-400">
+            <tr className="text-left text-[11px] uppercase tracking-wide text-pw-muted">
               <th className="py-1 pr-2">Knocker</th>
               <th className="py-1 pr-2">Market</th>
               <th className="py-1 pr-2 text-right">Credits (mo)</th>
@@ -49,17 +49,17 @@ export default function Promotion({ ctx }) {
           </thead>
           <tbody>
             {rows.map(({ rep, cur, prev, recruits, track }) => (
-              <tr key={rep.id} className="border-t border-gray-50">
-                <td className="py-1.5 pr-2 font-semibold text-gray-800">{rep.name}</td>
-                <td className="py-1.5 pr-2 text-gray-500">{markets.find((m) => m.id === rep.market_id)?.name}</td>
+              <tr key={rep.id} className="border-t border-pw-line/60">
+                <td className="py-1.5 pr-2 font-semibold text-white">{rep.name}</td>
+                <td className="py-1.5 pr-2 text-pw-muted">{markets.find((m) => m.id === rep.market_id)?.name}</td>
                 <td className="py-1.5 pr-2 text-right tabular-nums">{cur.toFixed(1)} / 8</td>
                 <td className="py-1.5 pr-2 text-right tabular-nums">{prev.toFixed(1)} / 8</td>
                 <td className="py-1.5 pr-2 text-right tabular-nums">{recruits} / 2</td>
                 <td className="py-1.5">
                   <div className="flex items-center gap-2">
-                    <div className="grow h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="grow h-2 bg-pw-black/60 rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full ${track >= 100 ? "bg-green-500" : "bg-blue-500"}`}
+                        className={`h-full rounded-full ${track >= 100 ? "bg-pw-green" : "bg-pw-red"}`}
                         style={{ width: `${Math.min(track, 100)}%` }}
                       />
                     </div>
@@ -69,13 +69,13 @@ export default function Promotion({ ctx }) {
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={6} className="py-6 text-center text-gray-400">No active knockers</td></tr>
+              <tr><td colSpan={6} className="py-6 text-center text-pw-muted">No active knockers</td></tr>
             )}
           </tbody>
         </table>
       </Card>
-      <p className="text-xs text-gray-400">
-        Credits = closes + 0.5 × credit fails. Promotion-ready at 100%: 8 credits this month, 8 last month, 2 recruits.
+      <p className="text-xs text-pw-muted">
+        Credits = closes + 0.5 Ã— credit fails. Promotion-ready at 100%: 8 credits this month, 8 last month, 2 recruits.
       </p>
     </div>
   );

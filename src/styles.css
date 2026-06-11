@@ -3,12 +3,32 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 html,
 body {
   margin: 0;
   padding: 0;
-  background: #f2f2f7;
+  background: #231f20;
+  color: #fff;
+  font-family: "Figtree", system-ui, sans-serif;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+::-webkit-scrollbar {
+  height: 6px;
+  width: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #403a3b;
+  border-radius: 4px;
 }

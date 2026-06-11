@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { today } from "../lib/dates";
 import { accountabilityFlags, SEVERITIES } from "../lib/calc";
 import { supabase } from "../lib/supabase";
@@ -81,13 +81,13 @@ export default function Accountability({ ctx }) {
 
       <Card className="p-3">
         <h3 className="font-display text-xl tracking-wide mb-2">Flags (trailing week)</h3>
-        {flagged.length === 0 && <p className="text-sm text-gray-400 py-4 text-center">No flags. Standards met across the board.</p>}
+        {flagged.length === 0 && <p className="text-sm text-pw-muted py-4 text-center">No flags. Standards met across the board.</p>}
         <div className="space-y-2">
           {flagged.map(({ rep, flags }) => (
-            <div key={rep.id} className="flex flex-wrap items-center gap-2 border-t border-gray-50 pt-2 first:border-0 first:pt-0">
-              <span className="font-semibold text-gray-800">{rep.name}</span>
-              <span className="text-[10px] uppercase text-gray-400">{rep.role}</span>
-              <span className="text-xs text-gray-400">{markets.find((m) => m.id === rep.market_id)?.name}</span>
+            <div key={rep.id} className="flex flex-wrap items-center gap-2 border-t border-pw-line/60 pt-2 first:border-0 first:pt-0">
+              <span className="font-semibold text-white">{rep.name}</span>
+              <span className="text-[10px] uppercase text-pw-muted">{rep.role}</span>
+              <span className="text-xs text-pw-muted">{markets.find((m) => m.id === rep.market_id)?.name}</span>
               {flags.map((f, i) => (
                 <Badge key={i} color={f.level === "action" ? "#FF3B30" : "#FF9500"} bg={f.level === "action" ? "#FFF0EF" : "#FFF8EE"}>
                   {f.text}
@@ -108,12 +108,12 @@ export default function Accountability({ ctx }) {
       </Card>
 
       {form && (
-        <Card className="p-3 border-orange-200">
+        <Card className="p-3 border-pw-orange/40">
           <h3 className="font-semibold mb-2">
-            Log escalation — {reps.find((r) => r.id === form.repId)?.name}
+            Log escalation â€” {reps.find((r) => r.id === form.repId)?.name}
           </h3>
           <div className="flex flex-wrap gap-2 items-end">
-            <label className="text-[11px] text-gray-500">
+            <label className="text-[11px] text-pw-muted">
               Severity
               <Select value={form.severity} onChange={(e) => setForm({ ...form, severity: e.target.value })} className="block mt-0.5">
                 {SEVERITIES.map((s) => (
@@ -121,7 +121,7 @@ export default function Accountability({ ctx }) {
                 ))}
               </Select>
             </label>
-            <label className="text-[11px] text-gray-500 grow">
+            <label className="text-[11px] text-pw-muted grow">
               Note
               <Input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} className="w-full mt-0.5" placeholder="What was discussed / agreed" />
             </label>
@@ -133,17 +133,17 @@ export default function Accountability({ ctx }) {
 
       <Card className="p-3">
         <h3 className="font-display text-xl tracking-wide mb-2">Escalation Log</h3>
-        {visibleEscalations.length === 0 && <p className="text-sm text-gray-400 py-4 text-center">No escalations logged.</p>}
+        {visibleEscalations.length === 0 && <p className="text-sm text-pw-muted py-4 text-center">No escalations logged.</p>}
         <div className="space-y-1.5">
           {visibleEscalations.map((esc) => {
             const rep = reps.find((r) => r.id === esc.rep_id);
             const meta = sevMeta(esc.severity);
             return (
-              <div key={esc.id} className="flex flex-wrap items-center gap-2 text-sm border-t border-gray-50 pt-1.5 first:border-0 first:pt-0">
+              <div key={esc.id} className="flex flex-wrap items-center gap-2 text-sm border-t border-pw-line/60 pt-1.5 first:border-0 first:pt-0">
                 <Badge color={meta.color} bg={meta.bg}>{meta.label}</Badge>
                 <span className="font-semibold">{rep?.name || "?"}</span>
-                <span className="text-gray-500">{esc.note}</span>
-                <span className="ml-auto text-xs text-gray-400">{esc.entry_date}</span>
+                <span className="text-pw-muted">{esc.note}</span>
+                <span className="ml-auto text-xs text-pw-muted">{esc.entry_date}</span>
                 <Btn kind="danger" onClick={() => removeEscalation(esc)}>Remove</Btn>
               </div>
             );

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { adminUsers, fetchEvents, logEvent } from "../lib/api";
 import { Card, SectionTitle, Btn, Input, Select, ErrorNote, Spinner } from "./ui";
@@ -75,19 +75,19 @@ function Users({ ctx }) {
       <ErrorNote>{err}</ErrorNote>
       <Card className="p-3 mb-3">
         <div className="flex flex-wrap gap-2 items-end">
-          <label className="text-[11px] text-gray-500 grow max-w-xs">
+          <label className="text-[11px] text-pw-muted grow max-w-xs">
             Email
             <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="w-full mt-0.5" />
           </label>
-          <label className="text-[11px] text-gray-500">
+          <label className="text-[11px] text-pw-muted">
             Temp password
             <Input value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="mt-0.5 w-36" />
           </label>
-          <label className="text-[11px] text-gray-500">
+          <label className="text-[11px] text-pw-muted">
             Name
             <Input value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} className="mt-0.5 w-28" />
           </label>
-          <label className="text-[11px] text-gray-500">
+          <label className="text-[11px] text-pw-muted">
             Role
             <Select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className="block mt-0.5">
               <option value="market_owner">Market Owner</option>
@@ -95,7 +95,7 @@ function Users({ ctx }) {
             </Select>
           </label>
           {form.role === "market_owner" && (
-            <label className="text-[11px] text-gray-500">
+            <label className="text-[11px] text-pw-muted">
               Market
               <Select value={form.market_id} onChange={(e) => setForm({ ...form, market_id: e.target.value })} className="block mt-0.5">
                 {markets.map((m) => (
@@ -105,20 +105,20 @@ function Users({ ctx }) {
             </label>
           )}
           <Btn onClick={createUser} disabled={busy || !form.email || form.password.length < 8}>
-            {busy ? "Creating…" : "Create Account"}
+            {busy ? "Creatingâ€¦" : "Create Account"}
           </Btn>
         </div>
-        <p className="text-[11px] text-gray-400 mt-2">
+        <p className="text-[11px] text-pw-muted mt-2">
           Share the temp password directly with the MO; they can keep it or you can reset it any time.
         </p>
       </Card>
       <Card className="p-3">
         {!users ? (
-          <Spinner label="Loading users…" />
+          <Spinner label="Loading usersâ€¦" />
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-[11px] uppercase tracking-wide text-gray-400">
+              <tr className="text-left text-[11px] uppercase tracking-wide text-pw-muted">
                 <th className="py-1 pr-2">Email</th>
                 <th className="py-1 pr-2">Name</th>
                 <th className="py-1 pr-2">Role</th>
@@ -128,9 +128,9 @@ function Users({ ctx }) {
             </thead>
             <tbody>
               {users.map((u) => (
-                <tr key={u.id} className={`border-t border-gray-50 ${u.active ? "" : "opacity-50"}`}>
+                <tr key={u.id} className={`border-t border-pw-line/60 ${u.active ? "" : "opacity-50"}`}>
                   <td className="py-1.5 pr-2">{u.email}</td>
-                  <td className="py-1.5 pr-2">{u.display_name || "—"}</td>
+                  <td className="py-1.5 pr-2">{u.display_name || "â€”"}</td>
                   <td className="py-1.5 pr-2">{u.role === "regional" ? "Regional" : "Market Owner"}</td>
                   <td className="py-1.5 pr-2">{markets.find((m) => m.id === u.market_id)?.name || "All"}</td>
                   <td className="py-1.5 text-right space-x-1">
@@ -156,14 +156,14 @@ function MarketSettings({ ctx }) {
   const { markets, profile, refresh } = ctx;
   const [err, setErr] = useState("");
 
-  async function setDealValue(m, value) {
+  async function setField(m, field, label, value) {
     setErr("");
     const { error } = await supabase
       .from("markets")
-      .update({ average_deal_value: value === "" ? null : Number(value) || 0 })
+      .update({ [field]: value === "" ? null : Number(value) || 0 })
       .eq("id", m.id);
     if (error) return setErr(error.message);
-    logEvent(profile.email, `Avg deal value updated for ${m.name}`, m.id);
+    logEvent(profile.email, `${label} updated for ${m.name}`, m.id);
     refresh();
   }
 
@@ -174,22 +174,33 @@ function MarketSettings({ ctx }) {
       <Card className="p-3">
         <table className="w-full text-sm max-w-md">
           <thead>
-            <tr className="text-left text-[11px] uppercase tracking-wide text-gray-400">
+            <tr className="text-left text-[11px] uppercase tracking-wide text-pw-muted">
               <th className="py-1 pr-2">Market</th>
-              <th className="py-1 text-right">Avg deal value $</th>
+              <th className="py-1 pr-2 text-right">Avg deal value $</th>
+              <th className="py-1 text-right">Monthly revenue goal $</th>
             </tr>
           </thead>
           <tbody>
             {markets.map((m) => (
-              <tr key={m.id} className="border-t border-gray-50">
-                <td className="py-1.5 pr-2 font-semibold text-gray-800">{m.name}</td>
-                <td className="py-1.5 text-right">
+              <tr key={m.id} className="border-t border-pw-line/60">
+                <td className="py-1.5 pr-2 font-semibold text-white">{m.name}</td>
+                <td className="py-1.5 pr-2 text-right">
                   <Input
                     type="number"
                     min="0"
                     defaultValue={m.average_deal_value ?? ""}
-                    onBlur={(e) => setDealValue(m, e.target.value)}
+                    onBlur={(e) => setField(m, "average_deal_value", "Avg deal value", e.target.value)}
                     className="w-28 text-right"
+                  />
+                </td>
+                <td className="py-1.5 text-right">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="1000"
+                    defaultValue={m.monthly_goal ?? ""}
+                    onBlur={(e) => setField(m, "monthly_goal", "Monthly goal", e.target.value)}
+                    className="w-32 text-right"
                   />
                 </td>
               </tr>
@@ -211,15 +222,15 @@ function EventLog() {
       <SectionTitle>Activity Log</SectionTitle>
       <Card className="p-3 max-h-96 overflow-y-auto">
         {!events ? (
-          <Spinner label="Loading…" />
+          <Spinner label="Loadingâ€¦" />
         ) : events.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-4">No activity yet.</p>
+          <p className="text-sm text-pw-muted text-center py-4">No activity yet.</p>
         ) : (
           <div className="space-y-1">
             {events.map((e) => (
-              <div key={e.id} className="text-xs text-gray-600 border-t border-gray-50 pt-1 first:border-0 first:pt-0">
-                <span className="text-gray-400">{new Date(e.ts).toLocaleString()}</span>{" "}
-                <span className="font-semibold">{e.actor_email || "system"}</span> — {e.message}
+              <div key={e.id} className="text-xs text-gray-300 border-t border-pw-line/60 pt-1 first:border-0 first:pt-0">
+                <span className="text-pw-muted">{new Date(e.ts).toLocaleString()}</span>{" "}
+                <span className="font-semibold">{e.actor_email || "system"}</span> â€” {e.message}
               </div>
             ))}
           </div>

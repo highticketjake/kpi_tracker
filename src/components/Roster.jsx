@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { logEvent } from "../lib/api";
 import { today, tenureLabel } from "../lib/dates";
@@ -51,24 +51,24 @@ export default function Roster({ ctx }) {
           )
         }
       >
-        Roster — {markets.find((m) => m.id === marketId)?.name || ""}
+        Roster â€” {markets.find((m) => m.id === marketId)?.name || ""}
       </SectionTitle>
       <ErrorNote>{err}</ErrorNote>
 
       <Card className="p-3">
         <div className="flex flex-wrap gap-2 items-end">
-          <label className="text-[11px] text-gray-500 grow max-w-xs">
+          <label className="text-[11px] text-pw-muted grow max-w-xs">
             Name
             <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full mt-0.5" />
           </label>
-          <label className="text-[11px] text-gray-500">
+          <label className="text-[11px] text-pw-muted">
             Role
             <Select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className="block mt-0.5">
               <option value="knocker">Knocker</option>
               <option value="closer">Closer</option>
             </Select>
           </label>
-          <label className="text-[11px] text-gray-500">
+          <label className="text-[11px] text-pw-muted">
             Start date
             <Input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} className="block mt-0.5" />
           </label>
@@ -79,7 +79,7 @@ export default function Roster({ ctx }) {
       <Card className="p-3">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-[11px] uppercase tracking-wide text-gray-400">
+            <tr className="text-left text-[11px] uppercase tracking-wide text-pw-muted">
               <th className="py-1 pr-2">Rep</th>
               <th className="py-1 pr-2">Role</th>
               <th className="py-1 pr-2">Tenure</th>
@@ -89,10 +89,10 @@ export default function Roster({ ctx }) {
           </thead>
           <tbody>
             {list.map((rep) => (
-              <tr key={rep.id} className={`border-t border-gray-50 ${rep.terminated ? "opacity-50" : ""}`}>
-                <td className="py-1.5 pr-2 font-semibold text-gray-800">{rep.name}</td>
-                <td className="py-1.5 pr-2 capitalize text-gray-500">{rep.role}</td>
-                <td className="py-1.5 pr-2 text-gray-500">{tenureLabel(rep.start_date, today())}</td>
+              <tr key={rep.id} className={`border-t border-pw-line/60 ${rep.terminated ? "opacity-50" : ""}`}>
+                <td className="py-1.5 pr-2 font-semibold text-white">{rep.name}</td>
+                <td className="py-1.5 pr-2 capitalize text-pw-muted">{rep.role}</td>
+                <td className="py-1.5 pr-2 text-pw-muted">{tenureLabel(rep.start_date, today())}</td>
                 <td className="py-1.5 pr-2 text-right">
                   <Input
                     type="number"
@@ -122,7 +122,7 @@ export default function Roster({ ctx }) {
               </tr>
             ))}
             {list.length === 0 && (
-              <tr><td colSpan={5} className="py-6 text-center text-gray-400">No reps yet — add the first one above.</td></tr>
+              <tr><td colSpan={5} className="py-6 text-center text-pw-muted">No reps yet â€” add the first one above.</td></tr>
             )}
           </tbody>
         </table>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { addDays, today, weekStartMonday } from "../lib/dates";
 import { challengeMatchups } from "../lib/calc";
 import { marketRangeTotals } from "../lib/api";
@@ -19,7 +19,7 @@ export default function Challenge() {
   }, []);
 
   if (err) return <ErrorNote>{err}</ErrorNote>;
-  if (!totals) return <Spinner label="Loading scoreboard…" />;
+  if (!totals) return <Spinner label="Loading scoreboardâ€¦" />;
 
   const allMarkets = totals.map((t) => ({ id: t.market_id, name: t.market_name }));
   const pairing = challengeMatchups(allMarkets, today());
@@ -27,7 +27,7 @@ export default function Challenge() {
 
   return (
     <div className="space-y-3">
-      <SectionTitle right={<span className="text-xs text-gray-400">Week of {pairing.weekStart}</span>}>
+      <SectionTitle right={<span className="text-xs text-pw-muted">Week of {pairing.weekStart}</span>}>
         Weekly Challenge
       </SectionTitle>
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -41,18 +41,18 @@ export default function Challenge() {
                 <span className="font-display text-2xl text-gray-300 px-2">VS</span>
                 <TeamScore name={b.name} closes={cb} winning={cb > ca} right />
               </div>
-              {ca === cb && <p className="text-center text-xs text-gray-400 mt-2">Tied</p>}
+              {ca === cb && <p className="text-center text-xs text-pw-muted mt-2">Tied</p>}
             </Card>
           );
         })}
         {pairing.bye && (
-          <Card className="p-4 flex items-center justify-center text-sm text-gray-400">
-            {pairing.bye.name} — bye week
+          <Card className="p-4 flex items-center justify-center text-sm text-pw-muted">
+            {pairing.bye.name} â€” bye week
           </Card>
         )}
       </div>
-      <p className="text-xs text-gray-400">
-        Matchups rotate round-robin each week. Score = total closes Mon–Sun.
+      <p className="text-xs text-pw-muted">
+        Matchups rotate round-robin each week. Score = total closes Monâ€“Sun.
       </p>
     </div>
   );
@@ -61,11 +61,11 @@ export default function Challenge() {
 function TeamScore({ name, closes, winning, right }) {
   return (
     <div className={`${right ? "text-right" : ""}`}>
-      <div className={`font-semibold ${winning ? "text-green-600" : "text-gray-700"}`}>
-        {name} {winning ? "👑" : ""}
+      <div className={`font-semibold ${winning ? "text-pw-lightgreen" : "text-gray-200"}`}>
+        {name} {winning ? "ðŸ‘‘" : ""}
       </div>
       <div className="font-display text-4xl">{closes}</div>
-      <div className="text-[10px] uppercase tracking-wide text-gray-400">closes</div>
+      <div className="text-[10px] uppercase tracking-wide text-pw-muted">closes</div>
     </div>
   );
 }

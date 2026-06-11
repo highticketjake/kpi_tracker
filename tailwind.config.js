@@ -4,38 +4,53 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        display: ['"Bebas Neue"', "Impact", "Haettenschweiler", "sans-serif"],
-        tv: ['"IBM Plex Sans"', "system-ui", "sans-serif"],
+        sans: ["Figtree", "system-ui", "sans-serif"],
+        display: ["Figtree", "system-ui", "sans-serif"],
+      },
+      colors: {
+        // Performance Windows brand palette (Brand Guidelines v1.0)
+        pw: {
+          black: "#231F20",
+          red: "#EB2229",
+          darkred: "#831618",
+          orange: "#EA6E30",
+          yellow: "#F6C444",
+          blue: "#1478C8",
+          skyblue: "#A9D9F4",
+          green: "#108D07",
+          lightgreen: "#B8D576",
+          tan: "#E1C8B4",
+          lighttan: "#F7F0EC",
+          // dark-theme surfaces derived from PW black
+          surface: "#2C2728",
+          surface2: "#363031",
+          line: "#403A3B",
+          muted: "#9B9495",
+        },
       },
       keyframes: {
-        "tv-breathe": {
-          "0%, 100%": { opacity: "0.55", transform: "scale(1)" },
-          "50%": { opacity: "0.95", transform: "scale(1.03)" },
+        "pw-pop": {
+          "0%": { transform: "scale(0.85)", opacity: "0" },
+          "60%": { transform: "scale(1.06)", opacity: "1" },
+          "100%": { transform: "scale(1)", opacity: "1" },
         },
-        "tv-drift": {
-          "0%, 100%": { transform: "translate(0%, 0%) rotate(0deg)" },
-          "33%": { transform: "translate(0.4%, -0.3%) rotate(0.2deg)" },
-          "66%": { transform: "translate(-0.35%, 0.35%) rotate(-0.15deg)" },
+        "pw-rise": {
+          "0%": { transform: "translateY(10px)", opacity: "0" },
+          "100%": { transform: "translateY(0)", opacity: "1" },
         },
-        "tv-grid": {
-          "0%, 100%": { backgroundPosition: "0px 0px, 0px 0px" },
-          "50%": { backgroundPosition: "8px 12px, -6px 4px" },
+        "pw-fill": {
+          "0%": { height: "0%" },
         },
-        "tv-float": {
-          "0%, 100%": { transform: "translateY(0)" },
-          "50%": { transform: "translateY(-5px)" },
-        },
-        "tv-shimmer": {
-          "0%, 100%": { opacity: "0.4" },
-          "50%": { opacity: "0.75" },
+        "pw-pulse": {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.55" },
         },
       },
       animation: {
-        "tv-breathe": "tv-breathe 10s ease-in-out infinite",
-        "tv-drift": "tv-drift 22s ease-in-out infinite",
-        "tv-grid": "tv-grid 14s ease-in-out infinite",
-        "tv-float": "tv-float 7s ease-in-out infinite",
-        "tv-shimmer": "tv-shimmer 5s ease-in-out infinite",
+        "pw-pop": "pw-pop 0.35s ease-out both",
+        "pw-rise": "pw-rise 0.4s ease-out both",
+        "pw-fill": "pw-fill 1.2s ease-out both",
+        "pw-pulse": "pw-pulse 2.4s ease-in-out infinite",
       },
     },
   },
