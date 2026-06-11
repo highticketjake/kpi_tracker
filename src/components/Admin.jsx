@@ -10,8 +10,45 @@ export default function Admin({ ctx }) {
     <div className="space-y-5">
       <Users ctx={ctx} />
       <MarketSettings ctx={ctx} />
+      <EmailDigest />
       <EventLog />
     </div>
+  );
+}
+
+function EmailDigest() {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  async function sendTest() {
+    setBusy(true);
+    setMsg("");
+    try {
+      const { data, error } = await supabase.functions.invoke("weekly-coach-email", { body: { test: true } });
+      if (error) throw error;
+      if (data?.skipped) setMsg(`Not sent: ${data.skipped}. Add the Resend API key first.`);
+      else if (data?.failed?.length) setMsg(`Send failed: ${JSON.stringify(data.failed[0]?.detail || data.failed[0])}`);
+      else setMsg(`Test sent to ${data?.sent?.join(", ") || "you"} — check your inbox.`);
+    } catch (e) {
+      setMsg(`Error: ${e.message || e}`);
+    }
+    setBusy(false);
+  }
+
+  return (
+    <section>
+      <SectionTitle>Sunday Coach Email</SectionTitle>
+      <Card className="p-3">
+        <p className="text-sm text-pw-muted mb-2">
+          Every Sunday at 7pm Central, each market owner gets their Coach's Card by email (you get all markets).
+          Send yourself a test to preview exactly what they'll see.
+        </p>
+        <div className="flex items-center gap-3">
+          <Btn onClick={sendTest} disabled={busy}>{busy ? "Sending…" : "Send me a test email"}</Btn>
+          {msg && <span className="text-xs text-pw-muted">{msg}</span>}
+        </div>
+      </Card>
+    </section>
   );
 }
 

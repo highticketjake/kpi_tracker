@@ -131,12 +131,14 @@ export function badgesFor(rep, stats, strk) {
 }
 
 // Trailing-week accountability flags (v1 thresholds kept).
+// Each flag carries a kind: 'effort' (activity problem -> 1-on-1) or
+// 'skill' (conversion problem -> shadow / ride-along).
 export function accountabilityFlags(rep, entriesByDate, endDate) {
   const flags = [];
   const weekDates = listDates(addDays(endDate, -6), endDate);
   const weekEntries = weekDates.map((d) => entriesByDate[d]).filter(Boolean);
   if (weekEntries.length === 0) {
-    flags.push({ level: "action", text: "No data logged this week" });
+    flags.push({ level: "action", kind: "effort", text: "No data logged this week" });
     return flags;
   }
   const wk = repStats(rep, weekEntries);
@@ -144,26 +146,62 @@ export function accountabilityFlags(rep, entriesByDate, endDate) {
 
   if (rep.role === "knocker") {
     if (endEntry && (endEntry.doors_knocked || 0) < KNOCKER_DOORS_STD)
-      flags.push({ level: "action", text: `Doors below ${KNOCKER_DOORS_STD} (${endEntry.doors_knocked || 0})` });
+      flags.push({ level: "action", kind: "effort", text: `Doors below ${KNOCKER_DOORS_STD} (${endEntry.doors_knocked || 0})` });
     if (endEntry && (endEntry.convos_had || 0) < KNOCKER_CONVOS_STD)
-      flags.push({ level: "action", text: `Convos below ${KNOCKER_CONVOS_STD} (${endEntry.convos_had || 0})` });
-    if (wk.setsAvg < 3) flags.push({ level: "action", text: `Sets avg ${wk.setsAvg.toFixed(1)}/day (<3)` });
-    else if (wk.setsAvg < 4) flags.push({ level: "coaching", text: `Sets avg ${wk.setsAvg.toFixed(1)}/day (<4)` });
-    if (wk.appts_ran < 5) flags.push({ level: "action", text: `Only ${wk.appts_ran} appts ran this week (<5)` });
-    if (wk.closes === 0) flags.push({ level: "action", text: "0 closes this week" });
-    else if (wk.closes === 1) flags.push({ level: "coaching", text: "1 close this week (<2)" });
+      flags.push({ level: "action", kind: "effort", text: `Convos below ${KNOCKER_CONVOS_STD} (${endEntry.convos_had || 0})` });
+    // low sets despite real conversation volume = pitch problem, not effort
+    const talking = wk.convos_had / Math.max(wk.days, 1) >= 40;
+    if (wk.setsAvg < 3) flags.push({ level: "action", kind: talking ? "skill" : "effort", text: `Sets avg ${wk.setsAvg.toFixed(1)}/day (<3)` });
+    else if (wk.setsAvg < 4) flags.push({ level: "coaching", kind: talking ? "skill" : "effort", text: `Sets avg ${wk.setsAvg.toFixed(1)}/day (<4)` });
+    if (wk.appts_ran < 5) flags.push({ level: "action", kind: "effort", text: `Only ${wk.appts_ran} appts ran this week (<5)` });
+    if (wk.closes === 0) flags.push({ level: "action", kind: wk.appts_ran >= 5 ? "skill" : "effort", text: "0 closes this week" });
+    else if (wk.closes === 1) flags.push({ level: "coaching", kind: "skill", text: "1 close this week (<2)" });
     const q = qualityScore(wk);
-    if (q != null && q < 40) flags.push({ level: "coaching", text: `Set quality ${q}/100 — CADs/cancels piling up` });
+    if (q != null && q < 40) flags.push({ level: "coaching", kind: "skill", text: `Set quality ${q}/100 — CADs/cancels piling up` });
   } else {
-    if (wk.hoursAvg < 4.5) flags.push({ level: "action", text: `Avg hours ${wk.hoursAvg.toFixed(1)} (<4.5)` });
-    else if (wk.hoursAvg < 5) flags.push({ level: "coaching", text: `Avg hours ${wk.hoursAvg.toFixed(1)} (<5)` });
+    if (wk.hoursAvg < 4.5) flags.push({ level: "action", kind: "effort", text: `Avg hours ${wk.hoursAvg.toFixed(1)} (<4.5)` });
+    else if (wk.hoursAvg < 5) flags.push({ level: "coaching", kind: "effort", text: `Avg hours ${wk.hoursAvg.toFixed(1)} (<5)` });
+    if (wk.appts_ran >= 5 && wk.closeRate < 30)
+      flags.push({ level: "coaching", kind: "skill", text: `Close rate ${wk.closeRate.toFixed(0)}% on ${wk.appts_ran} appts (<30%)` });
     const dayOfMonth = Number(endDate.slice(8, 10));
     const mtd = listDates(monthStart(endDate), endDate).map((d) => entriesByDate[d]).filter(Boolean);
     const selfGens = mtd.reduce((s, e) => s + (Number(e.self_gen_closes) || 0), 0);
-    if (selfGens === 0 && dayOfMonth > 20) flags.push({ level: "action", text: "0 self-gen closes this month (past day 20)" });
-    else if (selfGens === 0 && dayOfMonth > 14) flags.push({ level: "coaching", text: "0 self-gen closes this month (past day 14)" });
+    if (selfGens === 0 && dayOfMonth > 20) flags.push({ level: "action", kind: "effort", text: "0 self-gen closes this month (past day 20)" });
+    else if (selfGens === 0 && dayOfMonth > 14) flags.push({ level: "coaching", kind: "effort", text: "0 self-gen closes this month (past day 14)" });
   }
   return flags;
+}
+
+// Single weekly activity score used only for week-over-week trend arrows.
+export function weekScore(rep, entries) {
+  const s = repStats(rep, entries);
+  return rep.role === "knocker"
+    ? s.sets_set * 3 + s.closes * 8 + s.doors_knocked / 40
+    : s.totalCloses * 8 + s.hours;
+}
+
+// Coach's Card assessment for one rep: what conversation Monday needs.
+export function coachAssessment(rep, entriesByDate, endDate, repEscalations) {
+  const flags = accountabilityFlags(rep, entriesByDate, endDate);
+  const weekOf = (end) => listDates(addDays(end, -6), end).map((d) => entriesByDate[d]).filter(Boolean);
+  const curEntries = weekOf(endDate);
+  const prevEntries = weekOf(addDays(endDate, -7));
+  const cur = weekScore(rep, curEntries);
+  const prev = weekScore(rep, prevEntries);
+  const trend = prevEntries.length === 0 ? "flat" : cur > prev * 1.1 ? "up" : cur < prev * 0.9 ? "down" : "flat";
+
+  const hasEffort = flags.some((f) => f.kind === "effort");
+  const hasSkill = flags.some((f) => f.kind === "skill");
+  const rec = hasEffort && hasSkill ? "both" : hasEffort ? "1on1" : hasSkill ? "shadow" : null;
+
+  const order = SEVERITIES.map((s) => s.key);
+  const worst = Math.max(-1, ...(repEscalations || []).map((e) => order.indexOf(e.severity)));
+  const nextStep = SEVERITIES[Math.min(worst + 1, order.length - 1)];
+  const onFile = worst >= 0 ? SEVERITIES[worst] : null;
+
+  const stats = repStats(rep, curEntries);
+  const strk = streak(rep, entriesByDate, endDate);
+  return { rep, flags, rec, trend, nextStep, onFile, wins: badgesFor(rep, stats, strk), stats };
 }
 
 // Knocker promotion track: credits = closes + 0.5 * credit fails;
