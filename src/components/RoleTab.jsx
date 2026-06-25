@@ -4,7 +4,7 @@ import {
   repStats, repHours, derivedRan, streak, badgesFor, qualityScore, qualityGrade,
   fmt1, fmtPct, fmtMoney, DAY_HOURS_STD,
 } from "../lib/calc";
-import { saveEntry, logEvent } from "../lib/api";
+import { saveEntry, logEvent, addSale, setSaleCancelled, deleteSale } from "../lib/api";
 import { Card, SectionTitle, Btn, Input, Select, Stepper, Badge, HoursChip, ErrorNote } from "./ui";
 
 const RANGES = [
@@ -19,17 +19,17 @@ export function rangeBounds(key) {
   return [addDays(end, -29), end];
 }
 
-// "Appts ran" is no longer entered — it's derived as No-gos + Closes + Credit fails.
-// Market owners now log the outcome buckets directly; CADs and cancels are NOT ran.
+// "Appts ran" is derived (No-gos + Closes + Credit fails); CADs and cancelled
+// appts are NOT ran. Closes + revenue are logged per-sale in the Sales section
+// (see SalesSection), not as daily counts.
 const KNOCKER_FIELDS = [
   ["doors_knocked", "Doors", 10],
   ["convos_had", "Convos", 5],
   ["sets_set", "Sets", 1],
   ["no_gos", "No-gos", 1],
-  ["closes", "Closes", 1],
   ["credit_fails", "Credit fails", 1],
   ["cads", "CADs", 1],
-  ["cancels", "Cancels", 1],
+  ["cancels", "Cancelled appt", 1],
 ];
 const CLOSER_KNOCK_FIELDS = [
   ["doors_knocked", "Doors", 10],
@@ -38,12 +38,9 @@ const CLOSER_KNOCK_FIELDS = [
 ];
 const CLOSER_CLOSE_FIELDS = [
   ["no_gos", "No-gos", 1],
-  ["appts_closed", "Closes", 1],
   ["credit_fails", "Credit fails", 1],
   ["cads", "CADs", 1],
-  ["cancels", "Cancels", 1],
-  ["self_gen_closes", "SG closes", 1],
-  ["revenue", "Revenue $", 500],
+  ["cancels", "Cancelled appt", 1],
 ];
 const ALL_NUM_FIELDS = [
   "doors_knocked", "convos_had", "sets_set", "appts_ran", "appts_closed",
@@ -56,13 +53,87 @@ function emptyEntry(rep, date) {
   return e;
 }
 
-function EntryRow({ rep, entry, onSaved, actorEmail }) {
+// Per-sale ledger entry for a closer on one day. Each sale credits the closer +
+// knocker, counts as a ran appointment, and rolls revenue to closer + office.
+// Cancel keeps the count (still a yes / still ran / still promotion credit) but
+// drops the revenue. All done by the market owner.
+function SalesSection({ rep, date, daySales, knockers, profileId, actorEmail, onChange }) {
+  const [who, setWho] = useState("");
+  const [amount, setAmount] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const whoName = (s) =>
+    s.attribution === "self_gen" ? "Self-gen" : s.attribution === "house" ? "House" : (knockers.find((k) => k.id === s.knocker_id)?.name || "Knocker");
+
+  async function add() {
+    if (!who) return setErr("Pick who set the appointment");
+    setBusy(true); setErr("");
+    try {
+      const attribution = who === "self_gen" || who === "house" ? who : "knocker";
+      const sale = {
+        market_id: rep.market_id, closer_id: rep.id,
+        knocker_id: attribution === "knocker" ? who : null,
+        attribution, amount: Number(amount) || 0, sale_date: date, created_by: profileId,
+      };
+      await addSale(sale);
+      logEvent(actorEmail, `Sale logged for ${rep.name} (${fmtMoney(sale.amount)})`, rep.market_id);
+      setWho(""); setAmount("");
+      onChange();
+    } catch (e) { setErr(e.message || String(e)); }
+    setBusy(false);
+  }
+  async function toggle(s) {
+    try {
+      await setSaleCancelled(s.id, !s.cancelled_at);
+      logEvent(actorEmail, `Sale ${s.cancelled_at ? "reinstated" : "cancelled"} for ${rep.name}`, rep.market_id);
+      onChange();
+    } catch (e) { setErr(e.message || String(e)); }
+  }
+  async function remove(s) {
+    try { await deleteSale(s.id); onChange(); } catch (e) { setErr(e.message || String(e)); }
+  }
+
+  return (
+    <div className="mt-2.5 border-t border-pw-line/60 pt-2.5">
+      <div className="text-[10px] uppercase tracking-widest text-pw-muted mb-1.5">Sales (closes)</div>
+      {daySales.length > 0 && (
+        <div className="space-y-1 mb-2">
+          {daySales.map((s) => (
+            <div key={s.id} className="flex items-center gap-2 text-sm">
+              <span className={`font-bold tabular-nums ${s.cancelled_at ? "line-through text-pw-muted" : "text-white"}`}>{fmtMoney(s.amount)}</span>
+              <span className="text-pw-muted">← {whoName(s)}</span>
+              {s.cancelled_at && <Badge color="#EA6E30" bg="rgba(234,110,48,0.14)">cancelled</Badge>}
+              <div className="ml-auto flex gap-1.5">
+                <Btn kind="subtle" onClick={() => toggle(s)}>{s.cancelled_at ? "Reinstate" : "Cancel sale"}</Btn>
+                <Btn kind="ghost" onClick={() => remove(s)} className="px-2" title="Remove (entered by mistake)">✕</Btn>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex flex-wrap gap-2 items-center">
+        <Select value={who} onChange={(e) => setWho(e.target.value)}>
+          <option value="">Who set it?</option>
+          {knockers.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
+          <option value="self_gen">Self-generated</option>
+          <option value="house">House / unattributed</option>
+        </Select>
+        <Input type="number" min="0" step="500" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Amount $" className="w-32" />
+        <Btn onClick={add} disabled={busy}>{busy ? "Adding…" : "Add sale"}</Btn>
+      </div>
+      <ErrorNote>{err}</ErrorNote>
+    </div>
+  );
+}
+
+function EntryRow({ rep, entry, daySales = [], knockers = [], profileId, onSaved, actorEmail }) {
   const [form, setForm] = useState(() => ({ ...emptyEntry(rep, entry.entry_date), ...entry }));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [saved, setSaved] = useState(false);
   const isKnocker = rep.role === "knocker";
-  const ran = derivedRan(rep, form);
+  const ran = derivedRan(rep, form) + daySales.length;
   const hours = repHours(rep, { ...form, appts_ran: ran });
 
   function set(k, v) {
@@ -111,12 +182,14 @@ function EntryRow({ rep, entry, onSaved, actorEmail }) {
               <Stepper key={k} label={label} value={form[k]} step={step} onChange={(v) => set(k, v)} />
             ))}
           </div>
-          <div className="text-[10px] uppercase tracking-widest text-pw-muted mb-1.5">Closing</div>
+          <div className="text-[10px] uppercase tracking-widest text-pw-muted mb-1.5">Ran outcomes (non-sale)</div>
           <div className={grid}>
             {CLOSER_CLOSE_FIELDS.map(([k, label, step]) => (
               <Stepper key={k} label={label} value={form[k]} step={step} onChange={(v) => set(k, v)} />
             ))}
           </div>
+          <SalesSection rep={rep} date={form.entry_date} daySales={daySales} knockers={knockers}
+            profileId={profileId} actorEmail={actorEmail} onChange={onSaved} />
         </>
       )}
       <div className="flex gap-2 mt-2.5 items-center">
@@ -137,7 +210,7 @@ const CLOSER_SORTS = [
   ["totalCloses", "Closes"], ["revenue", "Revenue"], ["hours", "Hours"], ["closeRate", "Close%"], ["self_gen_closes", "Self-gens"],
 ];
 
-function Board({ role, reps, entries, markets, range }) {
+function Board({ role, reps, entries, sales = [], markets, range }) {
   const sorts = role === "knocker" ? KNOCKER_SORTS : CLOSER_SORTS;
   const [sortKey, setSortKey] = useState(sorts[0][0]);
   const [open, setOpen] = useState(null);
@@ -145,11 +218,12 @@ function Board({ role, reps, entries, markets, range }) {
   const rows = useMemo(() => {
     const [start, end] = rangeBounds(range);
     const inRange = entries.filter((e) => e.entry_date >= start && e.entry_date <= end);
+    const inRangeSales = sales.filter((s) => s.sale_date >= start && s.sale_date <= end);
     const byRepRange = {}, byRepAll = {};
     for (const e of inRange) (byRepRange[e.rep_id] ??= []).push(e);
     for (const e of entries) (byRepAll[e.rep_id] ??= {})[e.entry_date] = e;
     return reps.map((rep) => {
-      const stats = repStats(rep, byRepRange[rep.id] || []);
+      const stats = repStats(rep, byRepRange[rep.id] || [], inRangeSales);
       const strk = streak(rep, byRepAll[rep.id] || {}, today());
       const q = role === "knocker" ? qualityScore(stats) : null;
       return {
@@ -161,7 +235,7 @@ function Board({ role, reps, entries, markets, range }) {
         grade: qualityGrade(q),
       };
     });
-  }, [reps, entries, markets, range, role]);
+  }, [reps, entries, sales, markets, range, role]);
 
   const sorted = [...rows].sort((a, b) => (b.stats[sortKey] || 0) - (a.stats[sortKey] || 0));
   const headers =
@@ -243,7 +317,7 @@ function BoardRow({ i, row, cols, open, onToggle }) {
 }
 
 export default function RoleTab({ ctx, role }) {
-  const { markets, reps, entries, profile, isRegional, refresh } = ctx;
+  const { markets, reps, entries, sales = [], profile, isRegional, refresh } = ctx;
   const [date, setDate] = useState(today());
   const [marketId, setMarketId] = useState(profile.market_id || markets[0]?.id || "");
   const [range, setRange] = useState("week");
@@ -259,6 +333,22 @@ export default function RoleTab({ ctx, role }) {
     for (const e of entries) if (e.entry_date === date) m[e.rep_id] = e;
     return m;
   }, [entries, date]);
+
+  // knockers available for the sale's "who set it?" picker (same market)
+  const marketKnockers = useMemo(
+    () => reps.filter((r) => r.role === "knocker" && r.active && !r.terminated && r.market_id === marketId),
+    [reps, marketId]
+  );
+  // sales on the selected day, indexed by both the closer and the credited knocker
+  const daySalesByRep = useMemo(() => {
+    const m = {};
+    for (const s of sales) {
+      if (s.sale_date !== date) continue;
+      (m[s.closer_id] ??= []).push(s);
+      if (s.knocker_id) (m[s.knocker_id] ??= []).push(s);
+    }
+    return m;
+  }, [sales, date]);
 
   return (
     <div className="space-y-3">
@@ -284,6 +374,7 @@ export default function RoleTab({ ctx, role }) {
       )}
       {marketReps.map((rep) => (
         <EntryRow key={rep.id + date} rep={rep} entry={byRep[rep.id] || emptyEntry(rep, date)}
+          daySales={daySalesByRep[rep.id] || []} knockers={marketKnockers} profileId={profile.id}
           actorEmail={profile.email} onSaved={refresh} />
       ))}
 
@@ -295,7 +386,7 @@ export default function RoleTab({ ctx, role }) {
           {RANGES.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
         </Select>
       </div>
-      <Board role={role} reps={boardReps} entries={entries} markets={markets} range={range} />
+      <Board role={role} reps={boardReps} entries={entries} sales={sales} markets={markets} range={range} />
     </div>
   );
 }

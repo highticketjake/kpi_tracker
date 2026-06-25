@@ -1,9 +1,12 @@
 // KPI math. Hours model (Jake, 2026-06):
 //   knocker hours = convos / 10           (50 convos = 5-hr day = day worked)
 //   closer hours  = appts ran + 0.5*CADs + convos/10
-// Set outcomes are tracked as daily counts: closes / credit fails / cancels / CADs.
-// Market revenue + market closes always come from CLOSER rows to avoid double
-// counting (knocker closes are attribution for boards/promotion only).
+// Daily counts (kpi_entries): doors/convos/sets/no_gos/credit_fails/CADs/cancels.
+// Closes + revenue + knocker attribution come from the `sales` ledger (v2.4):
+//   each sale = closer + knocker + amount; cancel keeps the count (still a "yes",
+//   still ran, still promotion credit) but drops the revenue. Legacy pre-ledger
+//   closes/revenue stay in kpi_entries (frozen) and are added on top — the two
+//   sources are disjoint so there is no double count.
 import { addDays, listDates, monthStart, prevMonthRange, challengeWeekIndex, weekStartMonday } from "./dates";
 
 export const KNOCKER_DOORS_STD = 120;
@@ -39,6 +42,18 @@ export function derivedRan(rep, e) {
   return (Number(e.no_gos) || 0) + roleCloses + (Number(e.credit_fails) || 0);
 }
 
+// Aggregate a list of sale rows. closes counts ALL sales (cancelled ones are
+// still a "yes"); revenue counts only active (non-cancelled) sales.
+export function saleAgg(sales) {
+  let closes = 0, revenue = 0, selfGen = 0;
+  for (const s of sales) {
+    closes += 1;
+    if (!s.cancelled_at) revenue += Number(s.amount) || 0;
+    if (s.attribution === "self_gen") selfGen += 1;
+  }
+  return { closes, revenue, selfGen };
+}
+
 export function meetsDailyStandard(rep, e) {
   if (!e) return false;
   if (rep.role === "knocker")
@@ -52,9 +67,11 @@ const SUM_FIELDS = [
   "credit_fails", "cancels", "no_gos",
 ];
 
-export function repStats(rep, entries) {
+// `sales` should be pre-filtered to the same date range as `entries`; repStats
+// picks out this rep's rows (by closer_id for closers, knocker_id for knockers).
+export function repStats(rep, entries, sales = []) {
   const t = Object.fromEntries(SUM_FIELDS.map((f) => [f, 0]));
-  let days = 0, hours = 0, fullDays = 0, bestSets = 0, bestDoors = 0, bestCloses = 0;
+  let days = 0, hours = 0, fullDays = 0, bestSets = 0, bestDoors = 0;
   for (const e of entries) {
     days++;
     const h = repHours(rep, e);
@@ -62,10 +79,29 @@ export function repStats(rep, entries) {
     if (h >= DAY_HOURS_STD) fullDays++;
     bestSets = Math.max(bestSets, e.sets_set || 0);
     bestDoors = Math.max(bestDoors, e.doors_knocked || 0);
-    bestCloses = Math.max(bestCloses, (e.appts_closed || 0) + (e.self_gen_closes || 0) + (rep.role === "knocker" ? e.closes || 0 : 0));
     for (const f of SUM_FIELDS) t[f] += Number(e[f]) || 0;
   }
-  const totalCloses = rep.role === "knocker" ? t.closes : t.appts_closed + t.self_gen_closes;
+  const isKnocker = rep.role === "knocker";
+  const mySales = sales.filter((s) => (isKnocker ? s.knocker_id : s.closer_id) === rep.id);
+  const ledgerCloses = mySales.length;                                  // incl cancelled (still a yes)
+  const ledgerRevenue = mySales.reduce((a, s) => a + (s.cancelled_at ? 0 : Number(s.amount) || 0), 0);
+  const ledgerSelfGen = mySales.reduce((a, s) => a + (s.attribution === "self_gen" ? 1 : 0), 0);
+  // each close is a ran appointment (= an hour) for the closer
+  if (!isKnocker) hours += ledgerCloses;
+
+  // best single-day closes across legacy entries + ledger days (for badges)
+  const dayCloses = {};
+  for (const e of entries) {
+    const legacy = (e.appts_closed || 0) + (e.self_gen_closes || 0) + (isKnocker ? e.closes || 0 : 0);
+    if (legacy) dayCloses[e.entry_date] = (dayCloses[e.entry_date] || 0) + legacy;
+  }
+  for (const s of mySales) dayCloses[s.sale_date] = (dayCloses[s.sale_date] || 0) + 1;
+  const bestCloses = Math.max(0, ...Object.values(dayCloses));
+
+  const legacyCloses = isKnocker ? t.closes : t.appts_closed + t.self_gen_closes;
+  const totalCloses = legacyCloses + ledgerCloses;
+  const ran = t.appts_ran + ledgerCloses;            // legacy appts_ran holds legacy closes; ledger adds new
+  const revenue = t.revenue + (isKnocker ? 0 : ledgerRevenue);
   return {
     ...t,
     days,
@@ -74,13 +110,17 @@ export function repStats(rep, entries) {
     bestSets,
     bestDoors,
     bestCloses,
+    appts_ran: ran,                                  // combined ran (legacy + ledger)
+    revenue,                                         // combined (closer)
+    self_gen_closes: t.self_gen_closes + (isKnocker ? 0 : ledgerSelfGen),
+    closes: isKnocker ? totalCloses : t.closes,      // knocker attribution credit, combined
     totalCloses,
     setsAvg: days ? t.sets_set / days : 0,
     hoursAvg: days ? hours / days : 0,
     d2c: pct(t.convos_had, t.doors_knocked),
     c2s: pct(t.sets_set, t.convos_had),
-    closeRate: pct(t.appts_closed, t.appts_ran),
-    cadRate: pct(t.cads, t.appts_ran + t.cads),
+    closeRate: pct(totalCloses, ran),
+    cadRate: pct(t.cads, ran + t.cads),
     knockHours: t.convos_had / 10,
   };
 }
@@ -141,15 +181,18 @@ export function badgesFor(rep, stats, strk) {
 // Trailing-week accountability flags (v1 thresholds kept).
 // Each flag carries a kind: 'effort' (activity problem -> 1-on-1) or
 // 'skill' (conversion problem -> shadow / ride-along).
-export function accountabilityFlags(rep, entriesByDate, endDate) {
+export function accountabilityFlags(rep, entriesByDate, endDate, sales = []) {
   const flags = [];
-  const weekDates = listDates(addDays(endDate, -6), endDate);
+  const inRange = (d, start, end) => d >= start && d <= end;
+  const weekStart = addDays(endDate, -6);
+  const weekDates = listDates(weekStart, endDate);
   const weekEntries = weekDates.map((d) => entriesByDate[d]).filter(Boolean);
-  if (weekEntries.length === 0) {
+  const weekSales = sales.filter((s) => inRange(s.sale_date, weekStart, endDate));
+  if (weekEntries.length === 0 && weekSales.length === 0) {
     flags.push({ level: "action", kind: "effort", text: "No data logged this week" });
     return flags;
   }
-  const wk = repStats(rep, weekEntries);
+  const wk = repStats(rep, weekEntries, weekSales);
   const endEntry = entriesByDate[endDate];
 
   if (rep.role === "knocker") {
@@ -172,8 +215,10 @@ export function accountabilityFlags(rep, entriesByDate, endDate) {
     if (wk.appts_ran >= 5 && wk.closeRate < 30)
       flags.push({ level: "coaching", kind: "skill", text: `Close rate ${wk.closeRate.toFixed(0)}% on ${wk.appts_ran} appts (<30%)` });
     const dayOfMonth = Number(endDate.slice(8, 10));
-    const mtd = listDates(monthStart(endDate), endDate).map((d) => entriesByDate[d]).filter(Boolean);
-    const selfGens = mtd.reduce((s, e) => s + (Number(e.self_gen_closes) || 0), 0);
+    const mStart = monthStart(endDate);
+    const mtd = listDates(mStart, endDate).map((d) => entriesByDate[d]).filter(Boolean);
+    const selfGens = mtd.reduce((s, e) => s + (Number(e.self_gen_closes) || 0), 0)
+      + sales.filter((s) => s.closer_id === rep.id && s.attribution === "self_gen" && inRange(s.sale_date, mStart, endDate)).length;
     if (selfGens === 0 && dayOfMonth > 20) flags.push({ level: "action", kind: "effort", text: "0 self-gen closes this month (past day 20)" });
     else if (selfGens === 0 && dayOfMonth > 14) flags.push({ level: "coaching", kind: "effort", text: "0 self-gen closes this month (past day 14)" });
   }
@@ -181,22 +226,25 @@ export function accountabilityFlags(rep, entriesByDate, endDate) {
 }
 
 // Single weekly activity score used only for week-over-week trend arrows.
-export function weekScore(rep, entries) {
-  const s = repStats(rep, entries);
+export function weekScore(rep, entries, sales = []) {
+  const s = repStats(rep, entries, sales);
   return rep.role === "knocker"
     ? s.sets_set * 3 + s.closes * 8 + s.doors_knocked / 40
     : s.totalCloses * 8 + s.hours;
 }
 
 // Coach's Card assessment for one rep: what conversation Monday needs.
-export function coachAssessment(rep, entriesByDate, endDate, repEscalations) {
-  const flags = accountabilityFlags(rep, entriesByDate, endDate);
+export function coachAssessment(rep, entriesByDate, endDate, repEscalations, sales = []) {
+  const flags = accountabilityFlags(rep, entriesByDate, endDate, sales);
   const weekOf = (end) => listDates(addDays(end, -6), end).map((d) => entriesByDate[d]).filter(Boolean);
+  const salesOf = (end) => sales.filter((s) => s.sale_date >= addDays(end, -6) && s.sale_date <= end);
   const curEntries = weekOf(endDate);
+  const curSales = salesOf(endDate);
+  const cur = weekScore(rep, curEntries, curSales);
   const prevEntries = weekOf(addDays(endDate, -7));
-  const cur = weekScore(rep, curEntries);
-  const prev = weekScore(rep, prevEntries);
-  const trend = prevEntries.length === 0 ? "flat" : cur > prev * 1.1 ? "up" : cur < prev * 0.9 ? "down" : "flat";
+  const prevSales = salesOf(addDays(endDate, -7));
+  const prev = weekScore(rep, prevEntries, prevSales);
+  const trend = prevEntries.length === 0 && prevSales.length === 0 ? "flat" : cur > prev * 1.1 ? "up" : cur < prev * 0.9 ? "down" : "flat";
 
   const hasEffort = flags.some((f) => f.kind === "effort");
   const hasSkill = flags.some((f) => f.kind === "skill");
@@ -207,27 +255,32 @@ export function coachAssessment(rep, entriesByDate, endDate, repEscalations) {
   const nextStep = SEVERITIES[Math.min(worst + 1, order.length - 1)];
   const onFile = worst >= 0 ? SEVERITIES[worst] : null;
 
-  const stats = repStats(rep, curEntries);
+  const stats = repStats(rep, curEntries, curSales);
   const strk = streak(rep, entriesByDate, endDate);
   return { rep, flags, rec, trend, nextStep, onFile, wins: badgesFor(rep, stats, strk), stats };
 }
 
 // Knocker promotion track: credits = closes + 0.5 * credit fails;
 // 8 this month + 8 prior month + 2 recruits, weighted 40/40/20.
-export function promotionTrack(rep, entries, refDate) {
+// Sales attributed to this knocker count too — including CANCELLED ones (a
+// cancel still counts toward the 8 needed to promote).
+export function promotionTrack(rep, entries, refDate, sales = []) {
   const credits = (list) =>
     list.reduce((s, e) => s + (Number(e.closes) || 0) + 0.5 * (Number(e.credit_fails) || 0), 0);
+  const saleCount = (start, end) =>
+    sales.filter((s) => s.knocker_id === rep.id && s.sale_date >= start && s.sale_date <= end).length;
   const curStart = monthStart(refDate);
   const [prevStart, prevEnd] = prevMonthRange(refDate);
-  const cur = credits(entries.filter((e) => e.entry_date >= curStart && e.entry_date <= refDate));
-  const prev = credits(entries.filter((e) => e.entry_date >= prevStart && e.entry_date <= prevEnd));
+  const cur = credits(entries.filter((e) => e.entry_date >= curStart && e.entry_date <= refDate)) + saleCount(curStart, refDate);
+  const prev = credits(entries.filter((e) => e.entry_date >= prevStart && e.entry_date <= prevEnd)) + saleCount(prevStart, prevEnd);
   const recruits = Number(rep.recruits) || 0;
   const track = Math.min(cur / 8, 1) * 0.4 + Math.min(prev / 8, 1) * 0.4 + Math.min(recruits / 2, 1) * 0.2;
   return { cur, prev, recruits, track: track * 100 };
 }
 
-// Market aggregates. Closes + revenue come from closer rows only.
-export function marketTotals(reps, entries) {
+// Market aggregates. Closes + revenue = legacy closer rows (frozen) + the sales
+// ledger. `sales` should be pre-filtered to this market + date range.
+export function marketTotals(reps, entries, sales = []) {
   const byRep = Object.fromEntries(reps.map((r) => [r.id, r]));
   const t = { doors: 0, convos: 0, sets: 0, ran: 0, closes: 0, revenue: 0, cads: 0, cancels: 0 };
   for (const e of entries) {
@@ -243,6 +296,11 @@ export function marketTotals(reps, entries) {
       t.closes += (e.appts_closed || 0) + (e.self_gen_closes || 0);
       t.revenue += Number(e.revenue) || 0;
     }
+  }
+  for (const s of sales) {
+    t.closes += 1;                                   // every sale is a close (incl cancelled)
+    t.ran += 1;                                       // and a ran appointment
+    if (!s.cancelled_at) t.revenue += Number(s.amount) || 0;
   }
   return t;
 }

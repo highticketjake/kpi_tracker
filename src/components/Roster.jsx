@@ -91,7 +91,19 @@ export default function Roster({ ctx }) {
             {list.map((rep) => (
               <tr key={rep.id} className={`border-t border-pw-line/60 ${rep.terminated ? "opacity-50" : ""}`}>
                 <td className="py-1.5 pr-2 font-semibold text-white">{rep.name}</td>
-                <td className="py-1.5 pr-2 capitalize text-pw-muted">{rep.role}</td>
+                <td className="py-1.5 pr-2">
+                  <Select
+                    value={rep.role}
+                    onChange={(e) => {
+                      const nr = e.target.value;
+                      if (nr !== rep.role && window.confirm(`Change ${rep.name} from ${rep.role} to ${nr}? All their history is kept.`))
+                        update(rep, { role: nr }, `Rep ${rep.name} moved to ${nr}`);
+                    }}
+                  >
+                    <option value="knocker">Knocker</option>
+                    <option value="closer">Closer</option>
+                  </Select>
+                </td>
                 <td className="py-1.5 pr-2 text-pw-muted">{tenureLabel(rep.start_date, today())}</td>
                 <td className="py-1.5 pr-2 text-right">
                   <Input

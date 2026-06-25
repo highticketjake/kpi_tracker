@@ -21,7 +21,7 @@ const TREND = {
 };
 
 export default function Accountability({ ctx }) {
-  const { markets, reps, entries, escalations, profile, isRegional, refresh } = ctx;
+  const { markets, reps, entries, sales = [], escalations, profile, isRegional, refresh } = ctx;
   const [marketId, setMarketId] = useState(isRegional ? "" : profile.market_id);
   const [form, setForm] = useState(null); // { repId, severity, note }
   const [err, setErr] = useState("");
@@ -34,13 +34,13 @@ export default function Accountability({ ctx }) {
     return reps
       .filter((r) => r.active && !r.terminated)
       .filter((r) => !marketId || r.market_id === marketId)
-      .map((rep) => coachAssessment(rep, byRep[rep.id] || {}, today(), escByRep[rep.id]))
+      .map((rep) => coachAssessment(rep, byRep[rep.id] || {}, today(), escByRep[rep.id], sales))
       .filter((c) => c.rec || c.wins.length > 0)
       .sort((a, b) => {
         const w = { both: 0, "1on1": 1, shadow: 2 };
         return (w[a.rec] ?? 3) - (w[b.rec] ?? 3);
       });
-  }, [reps, entries, escalations, marketId]);
+  }, [reps, entries, sales, escalations, marketId]);
 
   const needTalk = cards.filter((c) => c.rec);
   const allWins = cards.filter((c) => c.wins.length > 0);

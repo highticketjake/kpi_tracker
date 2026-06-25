@@ -81,6 +81,7 @@ export default function App() {
     const ch = supabase
       .channel("v2-live")
       .on("postgres_changes", { event: "*", schema: "public", table: "kpi_entries" }, bump)
+      .on("postgres_changes", { event: "*", schema: "public", table: "sales" }, bump)
       .on("postgres_changes", { event: "*", schema: "public", table: "reps" }, bump)
       .on("postgres_changes", { event: "*", schema: "public", table: "escalations" }, bump)
       .subscribe();
