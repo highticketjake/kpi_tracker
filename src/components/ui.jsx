@@ -1,4 +1,5 @@
 // Shared primitives for the Performance Windows dark scoreboard theme.
+import { Component } from "react";
 
 export function Card({ children, className = "" }) {
   return <div className={`bg-pw-surface rounded-2xl border border-pw-line ${className}`}>{children}</div>;
@@ -69,7 +70,10 @@ export function Stepper({ label, value, onChange, step = 1 }) {
         type="number"
         min="0"
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          const n = Number(e.target.value);
+          onChange(Number.isFinite(n) ? Math.max(0, n) : 0);
+        }}
         className="w-12 text-center bg-transparent text-white text-base font-bold focus:outline-none"
       />
       <button
@@ -92,10 +96,11 @@ export function Badge({ color = "#F6C444", bg = "rgba(246,196,68,0.12)", childre
 }
 
 export function HoursChip({ hours, standard = 5 }) {
-  const full = hours >= standard;
+  const h = Number(hours) || 0;
+  const full = h >= standard;
   return (
     <Badge color={full ? "#B8D576" : "#F6C444"} bg={full ? "rgba(16,141,7,0.18)" : "rgba(246,196,68,0.12)"}>
-      {hours.toFixed(1)} hrs {full ? "· full day" : ""}
+      {h.toFixed(1)} hrs {full ? "· full day" : ""}
     </Badge>
   );
 }
@@ -121,4 +126,38 @@ export function Spinner({ label = "Loading…" }) {
 export function ErrorNote({ children }) {
   if (!children) return null;
   return <div className="text-sm text-red-300 bg-pw-darkred/30 rounded-xl px-3 py-2 my-2">{String(children)}</div>;
+}
+
+// Catches render-time crashes so one bad value can never blank the whole app.
+// Wrap per-tab (keyed by tab) so switching tabs clears a stuck error.
+export class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  componentDidCatch(error, info) {
+    console.error("UI crash caught by ErrorBoundary:", error, info);
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-[40vh] flex items-center justify-center p-6">
+          <Card className="max-w-md p-6 text-center">
+            <h2 className="font-extrabold text-xl uppercase text-white mb-2">Something went wrong</h2>
+            <p className="text-sm text-pw-muted mb-4">
+              This screen hit an error — your data is safe. Reload to continue.
+            </p>
+            <Btn onClick={() => window.location.reload()}>Reload</Btn>
+            <p className="text-[10px] text-pw-muted mt-3 break-words">
+              {String(this.state.error?.message || this.state.error)}
+            </p>
+          </Card>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }

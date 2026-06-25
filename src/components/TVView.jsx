@@ -3,28 +3,54 @@ import { addDays, monthStart, today, weekStartMonday } from "../lib/dates";
 import {
   repStats, marketTotals, paceProjection, badgesFor, streak, challengeMatchups, fmtMoney,
 } from "../lib/calc";
-import { marketRangeTotals } from "../lib/api";
+import { regionBoardData } from "../lib/api";
+import { Spinner } from "./ui";
 import logoNeg from "../assets/pw-logo-negative.png";
 
 // Cast-friendly TV dashboard: everything visible at once, no clicking.
 // Left: revenue goal thermometer. Center: overall leaderboard.
 // Sides: knockers / sets / ran. Bottom: rotating hype ticker.
 export default function TVView({ ctx, onExit }) {
-  const { markets, reps, entries, isRegional, profile } = ctx;
+  const [region, setRegion] = useState(null);
   const [mode, setMode] = useState("week");
-  const [marketId, setMarketId] = useState(isRegional ? "" : profile.market_id);
-  const [challenge, setChallenge] = useState(null);
+  // Default everyone to the region-wide view; any viewer can drill into a market.
+  const [marketId, setMarketId] = useState("");
   const [tick, setTick] = useState(0);
+
+  // Region-wide snapshot drives every board so all markets show for any viewer.
+  // Wide window so the monthly view and streaks have history; refresh on a timer
+  // since this is an unattended cast screen.
+  useEffect(() => {
+    let alive = true;
+    const load = () =>
+      regionBoardData(addDays(today(), -70)).then((d) => alive && setRegion(d)).catch(() => {});
+    load();
+    const timer = setInterval(load, 60000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, []);
+
+  const markets = region?.markets || [];
+  const reps = region?.reps || [];
+  const entries = region?.entries || [];
 
   const [start, end] = useMemo(() => {
     const t = today();
     return mode === "week" ? [weekStartMonday(t), t] : [monthStart(t), t];
   }, [mode]);
 
-  useEffect(() => {
+  const challenge = useMemo(() => {
+    if (!region) return null;
     const ws = weekStartMonday(today());
-    marketRangeTotals(ws, addDays(ws, 6)).then(setChallenge).catch(() => setChallenge(null));
-  }, []);
+    const we = addDays(ws, 6);
+    const inWeek = entries.filter((e) => e.entry_date >= ws && e.entry_date <= we);
+    return markets.map((m) => {
+      const t = marketTotals(reps.filter((r) => r.market_id === m.id), inWeek.filter((e) => e.market_id === m.id));
+      return { market_id: m.id, market_name: m.name, closes: t.closes };
+    });
+  }, [region, entries, markets, reps]);
 
   const data = useMemo(() => {
     const inRange = entries.filter(
@@ -95,6 +121,13 @@ export default function TVView({ ctx, onExit }) {
   const mvp = overall[0] && overall[0].closes > 0 ? overall[0] : null;
   const title = marketId ? markets.find((m) => m.id === marketId)?.name : "All Markets";
 
+  if (!region)
+    return (
+      <div className="h-screen bg-pw-black text-white flex items-center justify-center">
+        <Spinner label="Loading region scoreboard…" />
+      </div>
+    );
+
   return (
     <div className="h-screen bg-pw-black text-white flex flex-col p-5 overflow-hidden">
       <header className="flex items-center gap-4 mb-4 shrink-0">
@@ -111,13 +144,11 @@ export default function TVView({ ctx, onExit }) {
           ))}
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {isRegional && (
-            <select value={marketId} onChange={(e) => setMarketId(e.target.value)}
-              className="bg-pw-surface border border-pw-line rounded-xl px-3 py-2 text-sm">
-              <option value="">All Markets</option>
-              {markets.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-            </select>
-          )}
+          <select value={marketId} onChange={(e) => setMarketId(e.target.value)}
+            className="bg-pw-surface border border-pw-line rounded-xl px-3 py-2 text-sm">
+            <option value="">All Markets</option>
+            {markets.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
           <button onClick={() => setMode(mode === "week" ? "month" : "week")}
             className="bg-pw-surface border border-pw-line rounded-xl px-3 py-2 text-sm font-bold">
             {mode === "week" ? "Month" : "Week"}
