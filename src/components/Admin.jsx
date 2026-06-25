@@ -142,7 +142,7 @@ function Users({ ctx }) {
             </label>
           )}
           <Btn onClick={createUser} disabled={busy || !form.email || form.password.length < 8}>
-            {busy ? "Creatingâ€¦" : "Create Account"}
+            {busy ? "Creating…" : "Create Account"}
           </Btn>
         </div>
         <p className="text-[11px] text-pw-muted mt-2">
@@ -151,7 +151,7 @@ function Users({ ctx }) {
       </Card>
       <Card className="p-3">
         {!users ? (
-          <Spinner label="Loading usersâ€¦" />
+          <Spinner label="Loading users…" />
         ) : (
           <table className="w-full text-sm">
             <thead>
@@ -167,7 +167,7 @@ function Users({ ctx }) {
               {users.map((u) => (
                 <tr key={u.id} className={`border-t border-pw-line/60 ${u.active ? "" : "opacity-50"}`}>
                   <td className="py-1.5 pr-2">{u.email}</td>
-                  <td className="py-1.5 pr-2">{u.display_name || "â€”"}</td>
+                  <td className="py-1.5 pr-2">{u.display_name || "—"}</td>
                   <td className="py-1.5 pr-2">{u.role === "regional" ? "Regional" : "Market Owner"}</td>
                   <td className="py-1.5 pr-2">{markets.find((m) => m.id === u.market_id)?.name || "All"}</td>
                   <td className="py-1.5 text-right space-x-1">
@@ -259,7 +259,7 @@ function EventLog() {
       <SectionTitle>Activity Log</SectionTitle>
       <Card className="p-3 max-h-96 overflow-y-auto">
         {!events ? (
-          <Spinner label="Loadingâ€¦" />
+          <Spinner label="Loading…" />
         ) : events.length === 0 ? (
           <p className="text-sm text-pw-muted text-center py-4">No activity yet.</p>
         ) : (
@@ -267,7 +267,7 @@ function EventLog() {
             {events.map((e) => (
               <div key={e.id} className="text-xs text-gray-300 border-t border-pw-line/60 pt-1 first:border-0 first:pt-0">
                 <span className="text-pw-muted">{new Date(e.ts).toLocaleString()}</span>{" "}
-                <span className="font-semibold">{e.actor_email || "system"}</span> â€” {e.message}
+                <span className="font-semibold">{e.actor_email || "system"}</span> — {e.message}
               </div>
             ))}
           </div>

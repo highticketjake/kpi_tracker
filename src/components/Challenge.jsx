@@ -56,12 +56,12 @@ export default function Challenge() {
         })}
         {pairing.bye && (
           <Card className="p-4 flex items-center justify-center text-sm text-pw-muted">
-            {pairing.bye.name} â€” bye week
+            {pairing.bye.name} — bye week
           </Card>
         )}
       </div>
       <p className="text-xs text-pw-muted">
-        Matchups rotate round-robin each week. Score = total closes Monâ€“Sun.
+        Matchups rotate round-robin each week. Score = total closes Mon–Sun.
       </p>
     </div>
   );
@@ -71,7 +71,7 @@ function TeamScore({ name, closes, winning, right }) {
   return (
     <div className={`${right ? "text-right" : ""}`}>
       <div className={`font-semibold ${winning ? "text-pw-lightgreen" : "text-gray-200"}`}>
-        {name} {winning ? "ðŸ‘‘" : ""}
+        {name} {winning ? "👑" : ""}
       </div>
       <div className="font-display text-4xl">{closes}</div>
       <div className="text-[10px] uppercase tracking-wide text-pw-muted">closes</div>

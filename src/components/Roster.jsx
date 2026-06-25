@@ -51,7 +51,7 @@ export default function Roster({ ctx }) {
           )
         }
       >
-        Roster â€” {markets.find((m) => m.id === marketId)?.name || ""}
+        Roster — {markets.find((m) => m.id === marketId)?.name || ""}
       </SectionTitle>
       <ErrorNote>{err}</ErrorNote>
 
@@ -122,7 +122,7 @@ export default function Roster({ ctx }) {
               </tr>
             ))}
             {list.length === 0 && (
-              <tr><td colSpan={5} className="py-6 text-center text-pw-muted">No reps yet â€” add the first one above.</td></tr>
+              <tr><td colSpan={5} className="py-6 text-center text-pw-muted">No reps yet — add the first one above.</td></tr>
             )}
           </tbody>
         </table>
