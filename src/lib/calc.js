@@ -22,13 +22,21 @@ export function pct(n, d) {
 }
 
 export function knockerHours(e) {
-  return (e.convos_had || 0) / 10;
+  return (Number(e.convos_had) || 0) / 10;
 }
 export function closerHours(e) {
-  return (e.appts_ran || 0) + (e.cads || 0) * 0.5 + (e.convos_had || 0) / 10;
+  return (Number(e.appts_ran) || 0) + (Number(e.cads) || 0) * 0.5 + (Number(e.convos_had) || 0) / 10;
 }
 export function repHours(rep, e) {
   return rep.role === "knocker" ? knockerHours(e) : closerHours(e);
+}
+
+// A ran appointment = no-go OR close OR credit fail. CADs and cancels never count.
+// For closers the "close" is appts_closed; for knockers it's the attribution `closes`.
+// appts_ran is stored but always kept equal to this so the rest of the app is unchanged.
+export function derivedRan(rep, e) {
+  const roleCloses = rep.role === "closer" ? Number(e.appts_closed) || 0 : Number(e.closes) || 0;
+  return (Number(e.no_gos) || 0) + roleCloses + (Number(e.credit_fails) || 0);
 }
 
 export function meetsDailyStandard(rep, e) {
@@ -41,7 +49,7 @@ export function meetsDailyStandard(rep, e) {
 const SUM_FIELDS = [
   "doors_knocked", "convos_had", "sets_set", "appts_ran", "appts_closed",
   "cads", "closes", "revenue", "self_gen_sets", "self_gen_closes",
-  "credit_fails", "cancels",
+  "credit_fails", "cancels", "no_gos",
 ];
 
 export function repStats(rep, entries) {

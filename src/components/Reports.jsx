@@ -97,7 +97,7 @@ export default function Reports({ ctx }) {
     downloadCsv(`week-${weekStart}-summary.csv`, rows);
   }
   function exportRawEntries() {
-    const cols = ["entry_date", "rep", "role", "market", "doors_knocked", "convos_had", "sets_set", "appts_ran",
+    const cols = ["entry_date", "rep", "role", "market", "doors_knocked", "convos_had", "sets_set", "no_gos", "appts_ran",
       "appts_closed", "cads", "cancels", "credit_fails", "closes", "self_gen_sets", "self_gen_closes", "revenue", "notes"];
     const rows = [cols];
     const byRep = Object.fromEntries(reps.map((r) => [r.id, r]));

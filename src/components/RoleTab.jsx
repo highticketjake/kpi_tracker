@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { addDays, monthStart, today, weekStartMonday, tenureLabel } from "../lib/dates";
 import {
-  repStats, repHours, streak, badgesFor, qualityScore, qualityGrade,
+  repStats, repHours, derivedRan, streak, badgesFor, qualityScore, qualityGrade,
   fmt1, fmtPct, fmtMoney, DAY_HOURS_STD,
 } from "../lib/calc";
 import { saveEntry, logEvent } from "../lib/api";
@@ -19,15 +19,17 @@ export function rangeBounds(key) {
   return [addDays(end, -29), end];
 }
 
+// "Appts ran" is no longer entered — it's derived as No-gos + Closes + Credit fails.
+// Market owners now log the outcome buckets directly; CADs and cancels are NOT ran.
 const KNOCKER_FIELDS = [
   ["doors_knocked", "Doors", 10],
   ["convos_had", "Convos", 5],
   ["sets_set", "Sets", 1],
-  ["appts_ran", "Appts ran", 1],
+  ["no_gos", "No-gos", 1],
+  ["closes", "Closes", 1],
+  ["credit_fails", "Credit fails", 1],
   ["cads", "CADs", 1],
   ["cancels", "Cancels", 1],
-  ["credit_fails", "Credit fails", 1],
-  ["closes", "Closes", 1],
 ];
 const CLOSER_KNOCK_FIELDS = [
   ["doors_knocked", "Doors", 10],
@@ -35,16 +37,17 @@ const CLOSER_KNOCK_FIELDS = [
   ["self_gen_sets", "SG sets", 1],
 ];
 const CLOSER_CLOSE_FIELDS = [
-  ["appts_ran", "Appts ran", 1],
-  ["cads", "CADs ran", 1],
+  ["no_gos", "No-gos", 1],
   ["appts_closed", "Closes", 1],
-  ["self_gen_closes", "SG closes", 1],
   ["credit_fails", "Credit fails", 1],
+  ["cads", "CADs", 1],
+  ["cancels", "Cancels", 1],
+  ["self_gen_closes", "SG closes", 1],
   ["revenue", "Revenue $", 500],
 ];
 const ALL_NUM_FIELDS = [
   "doors_knocked", "convos_had", "sets_set", "appts_ran", "appts_closed",
-  "cads", "closes", "revenue", "self_gen_sets", "self_gen_closes", "credit_fails", "cancels",
+  "cads", "closes", "revenue", "self_gen_sets", "self_gen_closes", "credit_fails", "cancels", "no_gos",
 ];
 
 function emptyEntry(rep, date) {
@@ -59,7 +62,8 @@ function EntryRow({ rep, entry, onSaved, actorEmail }) {
   const [err, setErr] = useState("");
   const [saved, setSaved] = useState(false);
   const isKnocker = rep.role === "knocker";
-  const hours = repHours(rep, form);
+  const ran = derivedRan(rep, form);
+  const hours = repHours(rep, { ...form, appts_ran: ran });
 
   function set(k, v) {
     setSaved(false);
@@ -71,6 +75,7 @@ function EntryRow({ rep, entry, onSaved, actorEmail }) {
     try {
       const { id, created_by, updated_at, ...payload } = form;
       for (const f of ALL_NUM_FIELDS) payload[f] = Number(payload[f]) || 0;
+      payload.appts_ran = derivedRan(rep, payload); // keep ran consistent with its parts
       await saveEntry(payload);
       logEvent(actorEmail, `KPIs saved for ${rep.name} (${form.entry_date})`, rep.market_id);
       setSaved(true);
@@ -87,7 +92,10 @@ function EntryRow({ rep, entry, onSaved, actorEmail }) {
       <div className="flex flex-wrap items-center gap-2 mb-2.5">
         <span className="font-bold text-white">{rep.name}</span>
         <span className="text-[10px] uppercase tracking-widest text-pw-muted">{tenureLabel(rep.start_date, today())}</span>
-        <div className="ml-auto"><HoursChip hours={hours} standard={DAY_HOURS_STD} /></div>
+        <div className="ml-auto flex items-center gap-1.5">
+          <Badge color="#9ecbff" bg="rgba(158,203,255,0.12)">Ran {ran}</Badge>
+          <HoursChip hours={hours} standard={DAY_HOURS_STD} />
+        </div>
       </div>
       {isKnocker ? (
         <div className={grid}>

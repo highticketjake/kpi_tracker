@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "./lib/supabase";
 import { loadAll, getProfile } from "./lib/api";
-import { Spinner, Btn, Card } from "./components/ui";
+import { Spinner, Btn, Card, ErrorBoundary } from "./components/ui";
 import Login from "./components/Login";
 import RoleTab from "./components/RoleTab";
 import Reports from "./components/Reports";
@@ -9,6 +9,7 @@ import Accountability from "./components/Accountability";
 import Challenge from "./components/Challenge";
 import Promotion from "./components/Promotion";
 import Roster from "./components/Roster";
+import RepTracker from "./components/RepTracker";
 import Admin from "./components/Admin";
 import TVView from "./components/TVView";
 import pwIcon from "./assets/pw-icon.png";
@@ -20,6 +21,7 @@ const TABS = [
   { key: "accountability", label: "Accountability" },
   { key: "promotion", label: "Promotion" },
   { key: "challenge", label: "Challenge" },
+  { key: "rep", label: "Rep" },
   { key: "roster", label: "Roster" },
   { key: "tv", label: "TV" },
   { key: "admin", label: "Admin", regionalOnly: true },
@@ -111,7 +113,12 @@ export default function App() {
     );
   }
 
-  if (tab === "tv" && ctx) return <TVView ctx={ctx} onExit={() => setTab("knockers")} />;
+  if (tab === "tv" && ctx)
+    return (
+      <ErrorBoundary key="tv">
+        <TVView ctx={ctx} onExit={() => setTab("knockers")} />
+      </ErrorBoundary>
+    );
 
   return (
     <div className="min-h-screen max-w-6xl mx-auto p-3 sm:p-5">
@@ -148,7 +155,7 @@ export default function App() {
       ) : !ctx ? (
         <Spinner />
       ) : (
-        <>
+        <ErrorBoundary key={tab}>
           {tab === "knockers" && <RoleTab ctx={ctx} role="knocker" />}
           {tab === "closers" && <RoleTab ctx={ctx} role="closer" />}
           {tab === "reports" && <Reports ctx={ctx} />}
@@ -156,8 +163,9 @@ export default function App() {
           {tab === "promotion" && <Promotion ctx={ctx} />}
           {tab === "challenge" && <Challenge ctx={ctx} />}
           {tab === "roster" && <Roster ctx={ctx} />}
+          {tab === "rep" && <RepTracker ctx={ctx} />}
           {tab === "admin" && isRegional && <Admin ctx={ctx} />}
-        </>
+        </ErrorBoundary>
       )}
     </div>
   );

@@ -1,25 +1,34 @@
 ﻿import { useEffect, useState } from "react";
 import { addDays, today, weekStartMonday } from "../lib/dates";
-import { challengeMatchups } from "../lib/calc";
-import { marketRangeTotals } from "../lib/api";
+import { challengeMatchups, marketTotals } from "../lib/calc";
+import { regionBoardData } from "../lib/api";
 import { Card, SectionTitle, Spinner, ErrorNote } from "./ui";
 
 // Weekly office-vs-office matchup decided by total closes Mon-Sun.
-// Totals come from a security-definer RPC so MOs see other offices'
-// aggregate score without seeing their rep-level data.
+// Computed from a region-wide security-definer snapshot using the SAME
+// marketTotals() math as Reports/TV, so the scoreboard always agrees with them.
 export default function Challenge() {
   const [totals, setTotals] = useState(null);
   const [err, setErr] = useState("");
 
   useEffect(() => {
     const start = weekStartMonday(today());
-    marketRangeTotals(start, addDays(start, 6))
-      .then(setTotals)
+    const end = addDays(start, 6);
+    regionBoardData(start)
+      .then((d) => {
+        const inWeek = d.entries.filter((e) => e.entry_date >= start && e.entry_date <= end);
+        setTotals(
+          d.markets.map((m) => {
+            const t = marketTotals(d.reps.filter((r) => r.market_id === m.id), inWeek.filter((e) => e.market_id === m.id));
+            return { market_id: m.id, market_name: m.name, closes: t.closes };
+          })
+        );
+      })
       .catch((e) => setErr(e.message || String(e)));
   }, []);
 
   if (err) return <ErrorNote>{err}</ErrorNote>;
-  if (!totals) return <Spinner label="Loading scoreboardâ€¦" />;
+  if (!totals) return <Spinner label="Loading scoreboard…" />;
 
   const allMarkets = totals.map((t) => ({ id: t.market_id, name: t.market_name }));
   const pairing = challengeMatchups(allMarkets, today());

@@ -60,3 +60,6 @@ ui-debug.log
 
 ### Claude Code local launch config
 .claude/
+
+# local data backups
+backups/

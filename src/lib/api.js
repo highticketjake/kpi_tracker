@@ -66,6 +66,15 @@ export async function marketRangeTotals(start, end) {
   return data;
 }
 
+// Region-wide snapshot (all markets) for TV + Challenge. Security-definer RPC,
+// so every authenticated user sees the whole region for the leaderboards while
+// base-table RLS still scopes editing to each owner's market.
+export async function regionBoardData(start) {
+  const { data, error } = await supabase.rpc("region_board_data", { p_start: start });
+  if (error) throw error;
+  return data || { markets: [], reps: [], entries: [] };
+}
+
 // Regional-only user management via the admin-users edge function.
 export async function adminUsers(body) {
   const { data, error } = await supabase.functions.invoke("admin-users", { body });
