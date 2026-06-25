@@ -3,7 +3,39 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Ca
 import { addDays, listDates, monthStart, today, weekStartMonday } from "../lib/dates";
 import { marketTotals, paceProjection, qualityScore, repStats, fmtMoney, fmtPct, fmt1, pct } from "../lib/calc";
 import { Funnel, Thermometer } from "./viz";
-import { Card, SectionTitle, Btn, Select } from "./ui";
+import { setMarketGoal } from "../lib/api";
+import { Card, SectionTitle, Btn, Select, Input } from "./ui";
+
+// Market owners set their own market's monthly revenue goal here (regional can
+// set any). Writes via the set_market_goal RPC so RLS lets MOs edit only theirs.
+function GoalEditor({ markets, onSaved }) {
+  const [vals, setVals] = useState(() => Object.fromEntries(markets.map((m) => [m.id, m.monthly_goal ?? ""])));
+  const [msg, setMsg] = useState("");
+  async function save(id) {
+    setMsg("");
+    try {
+      await setMarketGoal(id, vals[id] === "" ? null : Number(vals[id]) || 0);
+      setMsg("Saved ✓");
+      onSaved();
+    } catch (e) { setMsg(e.message || String(e)); }
+  }
+  return (
+    <Card className="p-3">
+      <h3 className="font-extrabold text-sm uppercase tracking-tight text-pw-muted mb-2">Monthly revenue goal</h3>
+      <div className="space-y-1.5">
+        {markets.map((m) => (
+          <div key={m.id} className="flex items-center gap-2">
+            <span className="text-sm text-white grow">{m.name}</span>
+            <Input type="number" min="0" step="1000" value={vals[m.id]}
+              onChange={(e) => setVals({ ...vals, [m.id]: e.target.value })} className="w-36" placeholder="No goal" />
+            <Btn kind="subtle" onClick={() => save(m.id)}>Save</Btn>
+          </div>
+        ))}
+      </div>
+      {msg && <p className="text-xs text-pw-muted mt-1.5">{msg}</p>}
+    </Card>
+  );
+}
 
 function downloadCsv(filename, rows) {
   const esc = (v) => {
@@ -19,7 +51,7 @@ function downloadCsv(filename, rows) {
 }
 
 export default function Reports({ ctx }) {
-  const { markets, reps, entries, isRegional, profile, windowStart } = ctx;
+  const { markets, reps, entries, sales = [], isRegional, profile, windowStart, refresh } = ctx;
   const myMarkets = isRegional ? markets : markets.filter((m) => m.id === profile.market_id);
 
   // last 6 selectable weeks, newest (current, partial) first
@@ -35,23 +67,26 @@ export default function Reports({ ctx }) {
   const weekRows = useMemo(() => {
     const inWeek = entries.filter((e) => e.entry_date >= weekStart && e.entry_date <= weekEnd);
     const inPrev = entries.filter((e) => e.entry_date >= prevStart && e.entry_date <= prevEnd);
+    const salesWeek = sales.filter((s) => s.sale_date >= weekStart && s.sale_date <= weekEnd);
+    const salesPrev = sales.filter((s) => s.sale_date >= prevStart && s.sale_date <= prevEnd);
     return myMarkets.map((m) => {
       const mReps = reps.filter((r) => r.market_id === m.id && r.active && !r.terminated);
-      const cur = marketTotals(mReps, inWeek.filter((e) => e.market_id === m.id));
-      const prev = marketTotals(mReps, inPrev.filter((e) => e.market_id === m.id));
+      const cur = marketTotals(mReps, inWeek.filter((e) => e.market_id === m.id), salesWeek.filter((s) => s.market_id === m.id));
+      const prev = marketTotals(mReps, inPrev.filter((e) => e.market_id === m.id), salesPrev.filter((s) => s.market_id === m.id));
       const knockers = mReps.filter((r) => r.role === "knocker");
       const kEntries = inWeek.filter((e) => e.market_id === m.id && knockers.some((r) => r.id === e.rep_id));
       const kStats = repStats({ role: "knocker" }, kEntries);
       return { market: m, cur, prev, quality: qualityScore(kStats) };
     });
-  }, [myMarkets, reps, entries, weekStart, weekEnd, prevStart, prevEnd]);
+  }, [myMarkets, reps, entries, sales, weekStart, weekEnd, prevStart, prevEnd]);
 
   const monthRows = useMemo(() => {
     const start = monthStart(today());
     const mtd = entries.filter((e) => e.entry_date >= start);
+    const mtdSales = sales.filter((s) => s.sale_date >= start);
     return myMarkets.map((m) => {
       const mReps = reps.filter((r) => r.market_id === m.id);
-      const t = marketTotals(mReps, mtd.filter((e) => e.market_id === m.id));
+      const t = marketTotals(mReps, mtd.filter((e) => e.market_id === m.id), mtdSales.filter((s) => s.market_id === m.id));
       return {
         market: m,
         revenue: t.revenue,
@@ -60,16 +95,19 @@ export default function Reports({ ctx }) {
         closesPace: paceProjection(t.closes, today()),
       };
     });
-  }, [myMarkets, reps, entries]);
+  }, [myMarkets, reps, entries, sales]);
 
   const [funnelMarket, setFunnelMarket] = useState("");
   const funnelTotals = useMemo(() => {
     const inWeek = entries.filter(
       (e) => e.entry_date >= weekStart && e.entry_date <= weekEnd && (!funnelMarket || e.market_id === funnelMarket)
     );
+    const salesWeek = sales.filter(
+      (s) => s.sale_date >= weekStart && s.sale_date <= weekEnd && (!funnelMarket || s.market_id === funnelMarket)
+    );
     const scope = funnelMarket ? reps.filter((r) => r.market_id === funnelMarket) : reps;
-    return marketTotals(scope, inWeek);
-  }, [entries, reps, weekStart, weekEnd, funnelMarket]);
+    return marketTotals(scope, inWeek, salesWeek);
+  }, [entries, reps, sales, weekStart, weekEnd, funnelMarket]);
 
   const trendData = useMemo(() => {
     const start = addDays(today(), -13);
@@ -86,8 +124,14 @@ export default function Reports({ ctx }) {
       row.sets += (e.sets_set || 0) + (e.self_gen_sets || 0);
       if (closerIds.has(e.rep_id)) row.closes += (e.appts_closed || 0) + (e.self_gen_closes || 0);
     }
+    for (const s of sales) {
+      const row = byDate[s.sale_date];
+      if (!row) continue;
+      if (!isRegional && s.market_id !== profile.market_id) continue;
+      row.closes += 1; // ledger close (incl cancelled — still a yes)
+    }
     return Object.values(byDate);
-  }, [entries, reps, isRegional, profile]);
+  }, [entries, reps, sales, isRegional, profile]);
 
   function exportWeekSummary() {
     const rows = [["Market", "Doors", "Convos", "Sets", "Ran", "Closes", "Revenue", "Set quality"]];
@@ -115,6 +159,24 @@ export default function Reports({ ctx }) {
       });
     downloadCsv(`entries-${windowStart}-to-${today()}.csv`, rows);
   }
+  function exportSales() {
+    const cols = ["sale_date", "market", "closer", "knocker", "attribution", "amount", "cancelled"];
+    const rows = [cols];
+    const byRep = Object.fromEntries(reps.map((r) => [r.id, r]));
+    sales
+      .filter((s) => isRegional || s.market_id === profile.market_id)
+      .sort((a, b) => (a.sale_date < b.sale_date ? -1 : 1))
+      .forEach((s) => rows.push([
+        s.sale_date,
+        markets.find((m) => m.id === s.market_id)?.name || "",
+        byRep[s.closer_id]?.name || "",
+        s.attribution === "knocker" ? byRep[s.knocker_id]?.name || "" : s.attribution,
+        s.attribution,
+        s.amount,
+        s.cancelled_at ? "yes" : "",
+      ]));
+    downloadCsv(`sales-${windowStart}-to-${today()}.csv`, rows);
+  }
 
   const delta = (cur, prev) => {
     if (!prev) return null;
@@ -138,11 +200,14 @@ export default function Reports({ ctx }) {
             </Select>
             <Btn kind="subtle" onClick={exportWeekSummary}>⬇ Week CSV</Btn>
             <Btn kind="subtle" onClick={exportRawEntries}>⬇ Raw CSV</Btn>
+            <Btn kind="subtle" onClick={exportSales}>⬇ Sales CSV</Btn>
           </div>
         }
       >
         Weekly Report
       </SectionTitle>
+
+      <GoalEditor markets={myMarkets} onSaved={refresh} />
 
       <Card className="p-3 overflow-x-auto">
         <table className="w-full text-sm min-w-[760px]">

@@ -35,6 +35,7 @@ export default function TVView({ ctx, onExit }) {
   const markets = region?.markets || [];
   const reps = region?.reps || [];
   const entries = region?.entries || [];
+  const sales = region?.sales || [];
 
   const [start, end] = useMemo(() => {
     const t = today();
@@ -46,22 +47,30 @@ export default function TVView({ ctx, onExit }) {
     const ws = weekStartMonday(today());
     const we = addDays(ws, 6);
     const inWeek = entries.filter((e) => e.entry_date >= ws && e.entry_date <= we);
+    const inWeekSales = sales.filter((s) => s.sale_date >= ws && s.sale_date <= we);
     return markets.map((m) => {
-      const t = marketTotals(reps.filter((r) => r.market_id === m.id), inWeek.filter((e) => e.market_id === m.id));
+      const t = marketTotals(
+        reps.filter((r) => r.market_id === m.id),
+        inWeek.filter((e) => e.market_id === m.id),
+        inWeekSales.filter((s) => s.market_id === m.id)
+      );
       return { market_id: m.id, market_name: m.name, closes: t.closes };
     });
-  }, [region, entries, markets, reps]);
+  }, [region, entries, markets, reps, sales]);
 
   const data = useMemo(() => {
     const inRange = entries.filter(
       (e) => e.entry_date >= start && e.entry_date <= end && (!marketId || e.market_id === marketId)
+    );
+    const inRangeSales = sales.filter(
+      (s) => s.sale_date >= start && s.sale_date <= end && (!marketId || s.market_id === marketId)
     );
     const byRep = {}, allByRep = {};
     for (const e of inRange) (byRep[e.rep_id] ??= []).push(e);
     for (const e of entries) (allByRep[e.rep_id] ??= {})[e.entry_date] = e;
     const scope = reps.filter((r) => r.active && !r.terminated && (!marketId || r.market_id === marketId));
     const rows = scope.map((rep) => {
-      const stats = repStats(rep, byRep[rep.id] || []);
+      const stats = repStats(rep, byRep[rep.id] || [], inRangeSales);
       const strk = streak(rep, allByRep[rep.id] || {}, today());
       return {
         rep, stats, strk,
@@ -71,11 +80,13 @@ export default function TVView({ ctx, onExit }) {
         closes: stats.totalCloses,
       };
     });
-    const totals = marketTotals(scope, inRange);
-    const mtdEntries = entries.filter((e) => e.entry_date >= monthStart(today()) && (!marketId || e.market_id === marketId));
+    const totals = marketTotals(scope, inRange, inRangeSales);
+    const mStart = monthStart(today());
+    const mtdEntries = entries.filter((e) => e.entry_date >= mStart && (!marketId || e.market_id === marketId));
+    const mtdSales = sales.filter((s) => s.sale_date >= mStart && (!marketId || s.market_id === marketId));
     const thermo = (marketId ? markets.filter((m) => m.id === marketId) : markets).map((m) => {
       const mReps = reps.filter((r) => r.market_id === m.id);
-      const t = marketTotals(mReps, mtdEntries.filter((e) => e.market_id === m.id));
+      const t = marketTotals(mReps, mtdEntries.filter((e) => e.market_id === m.id), mtdSales.filter((s) => s.market_id === m.id));
       const goal = Number(m.monthly_goal) || 0;
       return {
         market: m, revenue: t.revenue, goal,
@@ -83,8 +94,12 @@ export default function TVView({ ctx, onExit }) {
         p: goal > 0 ? Math.min((t.revenue / goal) * 100, 100) : 0,
       };
     });
-    return { rows, totals, thermo };
-  }, [reps, entries, markets, start, end, marketId]);
+    const regionTotal = thermo.reduce(
+      (a, t) => ({ revenue: a.revenue + t.revenue, goal: a.goal + t.goal, pace: a.pace + t.pace }),
+      { revenue: 0, goal: 0, pace: 0 }
+    );
+    return { rows, totals, thermo, regionTotal };
+  }, [reps, entries, markets, sales, start, end, marketId]);
 
   // Rotating ticker: streaks, badges, challenge scores, pace lines.
   const tickerItems = useMemo(() => {
@@ -158,7 +173,7 @@ export default function TVView({ ctx, onExit }) {
       </header>
 
       <div className="grow grid grid-cols-12 gap-4 min-h-0">
-        <GoalColumn thermo={data.thermo} single={!!marketId} />
+        <GoalColumn thermo={data.thermo} single={!!marketId} total={data.regionTotal} />
 
         <Panel className="col-span-3" title="Knockers" subtitle="by sets">
           <RowList rows={knockers.slice(0, 8)} value={(r) => r.sets} unit="sets" />
@@ -236,12 +251,23 @@ function RowList({ rows, value, unit, sub, big = false, compact = false }) {
 }
 
 // Always-visible left column: % of monthly revenue goal.
-function GoalColumn({ thermo, single }) {
+function GoalColumn({ thermo, single, total }) {
   return (
     <div className="col-span-2 bg-pw-surface rounded-2xl border border-pw-line p-4 flex flex-col min-h-0 overflow-hidden">
       <h2 className="font-extrabold uppercase tracking-tight text-xl shrink-0">
         Goal <span className="text-pw-muted text-sm normal-case font-bold">this month</span>
       </h2>
+      {!single && total && (
+        <div className="mt-1 mb-2 shrink-0 text-center bg-pw-black/50 rounded-xl py-2">
+          <div className="font-extrabold text-3xl text-pw-yellow tabular-nums leading-tight">
+            {total.goal > 0 ? Math.round((total.revenue / total.goal) * 100) + "%" : "—"}
+          </div>
+          <div className="font-extrabold text-xl tabular-nums">{fmtMoney(total.revenue)}</div>
+          <div className="text-[10px] uppercase tracking-widest text-pw-muted">
+            region{total.goal > 0 ? ` · of ${fmtMoney(total.goal)}` : ""}
+          </div>
+        </div>
+      )}
       {single ? (
         thermo.map((t) => <BigThermo key={t.market.id} t={t} />)
       ) : (

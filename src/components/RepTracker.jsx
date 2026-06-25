@@ -27,7 +27,7 @@ const TREND = {
 // the coach read, and a day-by-day history. Uses RLS-scoped ctx data — a
 // market owner sees their own reps, regional sees everyone.
 export default function RepTracker({ ctx }) {
-  const { markets, reps, entries, escalations, profile, isRegional } = ctx;
+  const { markets, reps, entries, sales = [], escalations, profile, isRegional } = ctx;
   const [marketId, setMarketId] = useState(isRegional ? "" : profile.market_id);
   const [range, setRange] = useState("month");
 
@@ -44,25 +44,50 @@ export default function RepTracker({ ctx }) {
 
   const view = useMemo(() => {
     if (!rep) return null;
+    const isK = rep.role === "knocker";
     const [start, end] = rangeBounds(range);
     const repEntries = entries.filter((e) => e.rep_id === rep.id);
+    const repSales = sales.filter((s) => (isK ? s.knocker_id : s.closer_id) === rep.id);
     const inRange = repEntries.filter((e) => e.entry_date >= start && e.entry_date <= end);
+    const inRangeSales = repSales.filter((s) => s.sale_date >= start && s.sale_date <= end);
     const byDate = {};
     for (const e of repEntries) byDate[e.entry_date] = e;
     const escByRep = escalations.filter((e) => e.rep_id === rep.id);
-    const stats = repStats(rep, inRange);
-    const q = rep.role === "knocker" ? qualityScore(stats) : null;
-    const coach = coachAssessment(rep, byDate, today(), escByRep);
-    const rows = inRange.slice().sort((a, b) => (a.entry_date < b.entry_date ? 1 : -1));
+    const stats = repStats(rep, inRange, inRangeSales);
+    const q = isK ? qualityScore(stats) : null;
+    const coach = coachAssessment(rep, byDate, today(), escByRep, repSales);
+
+    // Daily history merged from entries + sales (closes/revenue/ran are combined)
+    const salesByDate = {};
+    for (const s of inRangeSales) (salesByDate[s.sale_date] ??= []).push(s);
+    const dates = Array.from(new Set([...inRange.map((e) => e.entry_date), ...Object.keys(salesByDate)]))
+      .sort((a, b) => (a < b ? 1 : -1));
+    const rows = dates.map((date) => {
+      const e = byDate[date] || {};
+      const ds = salesByDate[date] || [];
+      const dsRevenue = ds.reduce((a, x) => a + (x.cancelled_at ? 0 : Number(x.amount) || 0), 0);
+      const legacyCloses = isK ? (e.closes || 0) : (e.appts_closed || 0) + (e.self_gen_closes || 0);
+      const ran = (e.appts_ran || 0) + ds.length;
+      return {
+        date,
+        doors_knocked: e.doors_knocked || 0, convos_had: e.convos_had || 0, sets_set: e.sets_set || 0,
+        no_gos: e.no_gos || 0, credit_fails: e.credit_fails || 0, cads: e.cads || 0, cancels: e.cancels || 0,
+        closes: legacyCloses + ds.length,
+        sg: (e.self_gen_closes || 0) + ds.filter((x) => x.attribution === "self_gen").length,
+        revenue: (Number(e.revenue) || 0) + dsRevenue,
+        ran,
+        hours: repHours(rep, { ...e, appts_ran: ran }),
+      };
+    });
     const totals = {
       doors: stats.doors_knocked,
       convos: stats.convos_had,
-      sets: stats.sets_set + (rep.role === "closer" ? stats.self_gen_sets : 0),
+      sets: stats.sets_set + (isK ? 0 : stats.self_gen_sets),
       ran: stats.appts_ran,
       closes: stats.totalCloses,
     };
     return { stats, q, grade: qualityGrade(q), coach, rows, totals };
-  }, [rep, range, entries, escalations]);
+  }, [rep, range, entries, sales, escalations]);
 
   if (!rep)
     return (
@@ -88,8 +113,8 @@ export default function RepTracker({ ctx }) {
       ];
 
   const histCols = isKnocker
-    ? [["doors_knocked", "Doors"], ["convos_had", "Convos"], ["sets_set", "Sets"], ["no_gos", "No-go"], ["closes", "Cls"], ["credit_fails", "CF"], ["cads", "CAD"], ["cancels", "Can"], ["appts_ran", "Ran"]]
-    : [["no_gos", "No-go"], ["appts_closed", "Cls"], ["credit_fails", "CF"], ["cads", "CAD"], ["cancels", "Can"], ["appts_ran", "Ran"], ["self_gen_closes", "SG"], ["revenue", "Rev"]];
+    ? [["doors_knocked", "Doors"], ["convos_had", "Convos"], ["sets_set", "Sets"], ["no_gos", "No-go"], ["closes", "Cls"], ["credit_fails", "CF"], ["cads", "CAD"], ["cancels", "Can"], ["ran", "Ran"]]
+    : [["no_gos", "No-go"], ["closes", "Cls"], ["credit_fails", "CF"], ["cads", "CAD"], ["cancels", "Can"], ["ran", "Ran"], ["sg", "SG"], ["revenue", "Rev"]];
 
   const t = TREND[view.coach.trend];
   const recMeta = view.coach.rec ? REC_META[view.coach.rec] : null;
@@ -175,13 +200,13 @@ export default function RepTracker({ ctx }) {
             </tr>
           </thead>
           <tbody>
-            {view.rows.map((e) => (
-              <tr key={e.entry_date} className="border-t border-pw-line/60">
-                <td className="py-1.5 pr-2 text-gray-200">{e.entry_date}</td>
-                <td className="py-1.5 pr-2 text-right tabular-nums text-pw-muted">{fmt1(repHours(rep, e))}</td>
+            {view.rows.map((row) => (
+              <tr key={row.date} className="border-t border-pw-line/60">
+                <td className="py-1.5 pr-2 text-gray-200">{row.date}</td>
+                <td className="py-1.5 pr-2 text-right tabular-nums text-pw-muted">{fmt1(row.hours)}</td>
                 {histCols.map(([key]) => (
                   <td key={key} className="py-1.5 pr-2 text-right tabular-nums text-gray-200">
-                    {key === "revenue" ? fmtMoney(e[key]) : (e[key] ?? 0)}
+                    {key === "revenue" ? fmtMoney(row[key]) : (row[key] ?? 0)}
                   </td>
                 ))}
               </tr>

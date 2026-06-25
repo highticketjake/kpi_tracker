@@ -6,7 +6,7 @@ import { Card, SectionTitle, Select } from "./ui";
 // Knocker promotion track (v1 rules): 8 sales credits this month +
 // 8 prior month + 2 recruits, weighted 40/40/20.
 export default function Promotion({ ctx }) {
-  const { markets, reps, entries, profile, isRegional } = ctx;
+  const { markets, reps, entries, sales = [], profile, isRegional } = ctx;
   const [marketId, setMarketId] = useState(isRegional ? "" : profile.market_id);
 
   const rows = useMemo(() => {
@@ -15,9 +15,9 @@ export default function Promotion({ ctx }) {
     return reps
       .filter((r) => r.role === "knocker" && r.active && !r.terminated)
       .filter((r) => !marketId || r.market_id === marketId)
-      .map((rep) => ({ rep, ...promotionTrack(rep, byRep[rep.id] || [], today()) }))
+      .map((rep) => ({ rep, ...promotionTrack(rep, byRep[rep.id] || [], today(), sales) }))
       .sort((a, b) => b.track - a.track);
-  }, [reps, entries, marketId]);
+  }, [reps, entries, sales, marketId]);
 
   return (
     <div className="space-y-3">
@@ -75,7 +75,7 @@ export default function Promotion({ ctx }) {
         </table>
       </Card>
       <p className="text-xs text-pw-muted">
-        Credits = closes + 0.5 Ã— credit fails. Promotion-ready at 100%: 8 credits this month, 8 last month, 2 recruits.
+        Credits = closes (incl. cancelled sales) + 0.5 × credit fails. Promotion-ready at 100%: 8 credits this month, 8 last month, 2 recruits.
       </p>
     </div>
   );
