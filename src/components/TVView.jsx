@@ -148,16 +148,16 @@ export default function TVView({ ctx, onExit }) {
     );
 
   return (
-    <div className="h-screen bg-pw-black text-white flex flex-col p-5 overflow-hidden">
-      <header className="flex items-center gap-4 mb-4 shrink-0">
-        <img src={logoNeg} alt="Performance Windows" className="h-11 w-auto" />
-        <h1 className="font-extrabold text-3xl uppercase tracking-tight whitespace-nowrap">
-          {title} <span className="text-pw-muted text-xl">· {mode === "week" ? "this week" : "this month"}</span>
+    <div className="min-h-screen lg:h-screen bg-pw-black text-white flex flex-col p-3 md:p-5 lg:overflow-hidden">
+      <header className="flex flex-wrap items-center gap-2 md:gap-4 mb-3 md:mb-4 shrink-0">
+        <img src={logoNeg} alt="Performance Windows" className="h-8 md:h-11 w-auto" />
+        <h1 className="font-extrabold text-xl md:text-3xl uppercase tracking-tight md:whitespace-nowrap leading-tight">
+          {title} <span className="text-pw-muted text-sm md:text-xl">· {mode === "week" ? "this week" : "this month"}</span>
         </h1>
-        <div className="flex gap-3 ml-6 grow justify-center">
+        <div className="flex flex-wrap gap-2 md:gap-3 md:ml-6 grow justify-center">
           {[["Doors", data.totals.doors], ["Convos", data.totals.convos], ["Sets", data.totals.sets], ["Closes", data.totals.closes], ["Revenue", fmtMoney(data.totals.revenue)]].map(([label, v]) => (
-            <div key={label} className="bg-pw-surface rounded-xl border border-pw-line px-4 py-1.5 text-center min-w-[100px]">
-              <div className="font-extrabold text-2xl tabular-nums leading-tight">{v}</div>
+            <div key={label} className="bg-pw-surface rounded-xl border border-pw-line px-3 md:px-4 py-1.5 text-center min-w-[96px] md:min-w-[100px]">
+              <div className="font-extrabold text-lg md:text-2xl tabular-nums leading-tight">{v}</div>
               <div className="text-[9px] tracking-[0.25em] uppercase text-pw-muted">{label}</div>
             </div>
           ))}
@@ -176,14 +176,14 @@ export default function TVView({ ctx, onExit }) {
         </div>
       </header>
 
-      <div className="grow grid grid-cols-12 gap-4 min-h-0">
+      <div className="grow grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 min-h-0">
         <GoalColumn thermo={data.thermo} single={!!marketId} total={data.regionTotal} />
 
-        <Panel className="col-span-3" title="Knockers" subtitle="by sets">
+        <Panel className="md:col-span-3" title="Knockers" subtitle="by sets">
           <RowList rows={knockers.slice(0, 8)} value={(r) => r.sets} unit="sets" />
         </Panel>
 
-        <Panel className="col-span-4" title="Overall" subtitle="closes generated — knocker sets & closer self-gens" big highlight>
+        <Panel className="md:col-span-4 order-first md:order-none" title="Overall" subtitle="closes generated — knocker sets & closer self-gens" big highlight>
           {mvp && (
             <div className="flex items-center gap-2 mb-2 animate-pw-pop">
               <span className="text-pw-yellow font-extrabold text-xl">★ MVP {mvp.rep.name}</span>
@@ -196,7 +196,7 @@ export default function TVView({ ctx, onExit }) {
             sub={(r) => `${r.sets} sets · ${fmtMoney(r.genRev)}`} />
         </Panel>
 
-        <div className="col-span-3 flex flex-col gap-4 min-h-0">
+        <div className="md:col-span-3 flex flex-col gap-3 md:gap-4 min-h-0">
           <Panel title="Closers" subtitle="by closes closed" className="flex-1">
             <RowList compact rows={closers} value={(r) => r.closes} unit=""
               sub={(r) => fmtMoney(r.stats.revenue)} />
@@ -207,9 +207,9 @@ export default function TVView({ ctx, onExit }) {
         </div>
       </div>
 
-      <footer className="shrink-0 mt-4 bg-pw-surface border border-pw-line rounded-2xl flex items-center overflow-hidden">
+      <footer className="shrink-0 mt-3 md:mt-4 bg-pw-surface border border-pw-line rounded-2xl flex items-center overflow-hidden">
         <div className="bg-pw-red self-stretch flex items-center px-4 font-extrabold uppercase tracking-widest text-sm shrink-0">Live</div>
-        <div key={tick} className="px-5 py-3 text-xl font-bold animate-pw-rise truncate">
+        <div key={tick} className="px-3 md:px-5 py-2.5 md:py-3 text-base md:text-xl font-bold animate-pw-rise truncate">
           {tickerItems[tick % tickerItems.length]}
         </div>
         <div className="ml-auto pr-4 flex gap-1.5 shrink-0">
@@ -258,7 +258,7 @@ function RowList({ rows, value, unit, sub, big = false, compact = false }) {
 // Always-visible left column: % of monthly revenue goal.
 function GoalColumn({ thermo, single, total }) {
   return (
-    <div className="col-span-2 bg-pw-surface rounded-2xl border border-pw-line p-4 flex flex-col min-h-0 overflow-hidden">
+    <div className="md:col-span-2 bg-pw-surface rounded-2xl border border-pw-line p-4 flex flex-col min-h-0 overflow-hidden">
       <h2 className="font-extrabold uppercase tracking-tight text-xl shrink-0">
         Goal <span className="text-pw-muted text-sm normal-case font-bold">this month</span>
       </h2>
@@ -276,7 +276,7 @@ function GoalColumn({ thermo, single, total }) {
       {single ? (
         thermo.map((t) => <BigThermo key={t.market.id} t={t} />)
       ) : (
-        <div className="grow flex flex-col justify-around mt-2 min-h-0">
+        <div className="grow flex flex-col justify-around gap-2 mt-2 min-h-0">
           {thermo.map((t) => (
             <div key={t.market.id} className="flex items-center gap-2.5">
               <div className="grow">
@@ -303,7 +303,7 @@ function BigThermo({ t }) {
       <div className="font-extrabold text-5xl text-pw-yellow tabular-nums animate-pw-pop">
         {t.goal > 0 ? Math.round(t.p) + "%" : "—"}
       </div>
-      <div className="relative w-14 grow max-h-[45vh] bg-pw-black/60 rounded-full overflow-hidden">
+      <div className="relative w-14 grow min-h-[160px] max-h-[45vh] bg-pw-black/60 rounded-full overflow-hidden">
         <div className="absolute bottom-0 left-0 right-0 bg-pw-red rounded-full transition-all duration-1000" style={{ height: t.p + "%" }} />
         {t.goal > 0 && (
           <div className="absolute left-0 right-0 border-t-2 border-dashed border-pw-yellow"

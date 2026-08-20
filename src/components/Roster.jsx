@@ -76,8 +76,8 @@ export default function Roster({ ctx }) {
         </div>
       </Card>
 
-      <Card className="p-3">
-        <table className="w-full text-sm">
+      <Card className="p-3 overflow-x-auto">
+        <table className="w-full text-sm min-w-[520px]">
           <thead>
             <tr className="text-left text-[11px] uppercase tracking-wide text-pw-muted">
               <th className="py-1 pr-2">Rep</th>

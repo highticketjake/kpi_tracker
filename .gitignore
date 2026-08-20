@@ -63,3 +63,8 @@ ui-debug.log
 
 # local data backups
 backups/
+
+# dev-only mobile QA harness
+dev-mobile.html
+vite.mobile.config.js
+src/dev/
