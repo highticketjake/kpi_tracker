@@ -145,6 +145,7 @@ function EntryRow({ rep, entry, daySales = [], knockers = [], profileId, onSaved
     setErr("");
     try {
       const { id, created_by, updated_at, ...payload } = form;
+      payload.created_by = profileId; // audit: who last saved this row
       for (const f of ALL_NUM_FIELDS) payload[f] = Number(payload[f]) || 0;
       payload.appts_ran = derivedRan(rep, payload); // keep ran consistent with its parts
       await saveEntry(payload);
@@ -327,7 +328,10 @@ export default function RoleTab({ ctx, role }) {
     [reps, role]
   );
   const marketReps = activeReps.filter((r) => r.market_id === marketId);
-  const boardReps = isRegional ? activeReps : marketReps;
+  // v2.5: everyone can VIEW any market (region-wide reads), but only the
+  // owner (or regional) can enter numbers for it — RLS enforces this server-side.
+  const canEdit = isRegional || marketId === profile.market_id;
+  const boardReps = activeReps; // leaderboard is region-wide for every viewer
   const byRep = useMemo(() => {
     const m = {};
     for (const e of entries) if (e.entry_date === date) m[e.rep_id] = e;
@@ -355,11 +359,9 @@ export default function RoleTab({ ctx, role }) {
       <SectionTitle
         right={
           <div className="flex flex-wrap gap-2">
-            {isRegional && (
-              <Select value={marketId} onChange={(e) => setMarketId(e.target.value)}>
-                {markets.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-              </Select>
-            )}
+            <Select value={marketId} onChange={(e) => setMarketId(e.target.value)}>
+              {markets.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </Select>
             <Input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} />
           </div>
         }
@@ -367,12 +369,17 @@ export default function RoleTab({ ctx, role }) {
         {role === "knocker" ? "Knockers" : "Closers"}
       </SectionTitle>
 
-      {marketReps.length === 0 && (
+      {!canEdit && (
+        <Card className="p-3 text-center text-xs text-pw-muted">
+          Viewing {markets.find((m) => m.id === marketId)?.name} — entries are logged by that market's owner. Numbers below are live.
+        </Card>
+      )}
+      {canEdit && marketReps.length === 0 && (
         <Card className="p-6 text-center text-sm text-pw-muted">
           No active {role}s in this market. Add them on the Roster tab.
         </Card>
       )}
-      {marketReps.map((rep) => (
+      {canEdit && marketReps.map((rep) => (
         <EntryRow key={rep.id + date} rep={rep} entry={byRep[rep.id] || emptyEntry(rep, date)}
           daySales={daySalesByRep[rep.id] || []} knockers={marketKnockers} profileId={profile.id}
           actorEmail={profile.email} onSaved={refresh} />
@@ -380,7 +387,7 @@ export default function RoleTab({ ctx, role }) {
 
       <div className="flex items-center justify-between pt-2">
         <h3 className="font-extrabold text-lg uppercase tracking-tight text-pw-muted">
-          {isRegional ? "All markets" : markets.find((m) => m.id === marketId)?.name}
+          All markets
         </h3>
         <Select value={range} onChange={(e) => setRange(e.target.value)}>
           {RANGES.map(([k, label]) => <option key={k} value={k}>{label}</option>)}

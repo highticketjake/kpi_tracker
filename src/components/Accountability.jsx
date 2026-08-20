@@ -74,7 +74,7 @@ export default function Accountability({ ctx }) {
     <div className="space-y-3">
       <SectionTitle
         right={
-          isRegional && (
+          (
             <Select value={marketId} onChange={(e) => setMarketId(e.target.value)}>
               <option value="">All Markets</option>
               {markets.map((m) => (
@@ -105,7 +105,7 @@ export default function Accountability({ ctx }) {
               <Badge color={meta.color} bg={meta.bg}>{meta.label}</Badge>
               <span className="font-bold text-white">{c.rep.name}</span>
               <span className="text-[10px] uppercase tracking-widest text-pw-muted">{c.rep.role}</span>
-              {isRegional && !marketId && (
+              {!marketId && (
                 <span className="text-xs text-pw-muted">{markets.find((m) => m.id === c.rep.market_id)?.name}</span>
               )}
               <span className="ml-auto text-xs font-bold" style={{ color: t.color }}>
@@ -127,9 +127,11 @@ export default function Accountability({ ctx }) {
               ) : (
                 <span className="text-xs text-pw-muted">Nothing on file — conversation first, paper only if it repeats.</span>
               )}
+              {(isRegional || c.rep.market_id === profile.market_id) && (
               <Btn kind="subtle" className="ml-auto" onClick={() => setForm({ repId: c.rep.id, severity: c.nextStep.key, note: "" })}>
                 Log {c.nextStep.label} →
               </Btn>
+              )}
             </div>
           </Card>
         );

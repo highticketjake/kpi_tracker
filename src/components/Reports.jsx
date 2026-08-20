@@ -52,7 +52,9 @@ function downloadCsv(filename, rows) {
 
 export default function Reports({ ctx }) {
   const { markets, reps, entries, sales = [], isRegional, profile, windowStart, refresh } = ctx;
-  const myMarkets = isRegional ? markets : markets.filter((m) => m.id === profile.market_id);
+  // v2.5: numbers are region-wide for every user; only goal EDITING stays own-market.
+  const myMarkets = markets;
+  const goalMarkets = isRegional ? markets : markets.filter((m) => m.id === profile.market_id);
 
   // last 6 selectable weeks, newest (current, partial) first
   const weeks = useMemo(() => {
@@ -118,7 +120,6 @@ export default function Reports({ ctx }) {
     for (const e of entries) {
       const row = byDate[e.entry_date];
       if (!row) continue;
-      if (!isRegional && e.market_id !== profile.market_id) continue;
       row.doors += e.doors_knocked || 0;
       row.convos += e.convos_had || 0;
       row.sets += (e.sets_set || 0) + (e.self_gen_sets || 0);
@@ -127,7 +128,6 @@ export default function Reports({ ctx }) {
     for (const s of sales) {
       const row = byDate[s.sale_date];
       if (!row) continue;
-      if (!isRegional && s.market_id !== profile.market_id) continue;
       row.closes += 1; // ledger close (incl cancelled — still a yes)
     }
     return Object.values(byDate);
@@ -146,7 +146,6 @@ export default function Reports({ ctx }) {
     const rows = [cols];
     const byRep = Object.fromEntries(reps.map((r) => [r.id, r]));
     entries
-      .filter((e) => isRegional || e.market_id === profile.market_id)
       .sort((a, b) => (a.entry_date < b.entry_date ? -1 : 1))
       .forEach((e) => {
         const rep = byRep[e.rep_id];
@@ -164,7 +163,6 @@ export default function Reports({ ctx }) {
     const rows = [cols];
     const byRep = Object.fromEntries(reps.map((r) => [r.id, r]));
     sales
-      .filter((s) => isRegional || s.market_id === profile.market_id)
       .sort((a, b) => (a.sale_date < b.sale_date ? -1 : 1))
       .forEach((s) => rows.push([
         s.sale_date,
@@ -207,7 +205,7 @@ export default function Reports({ ctx }) {
         Weekly Report
       </SectionTitle>
 
-      <GoalEditor markets={myMarkets} onSaved={refresh} />
+      <GoalEditor markets={goalMarkets} onSaved={refresh} />
 
       <Card className="p-3 overflow-x-auto">
         <table className="w-full text-sm min-w-[760px]">
@@ -240,19 +238,17 @@ export default function Reports({ ctx }) {
             ))}
           </tbody>
         </table>
-        <p className="text-[11px] text-pw-muted mt-2">▲▼ vs. prior week. Closes and revenue are counted from closer entries.</p>
+        <p className="text-[11px] text-pw-muted mt-2">▲▼ vs. prior week. Closes and revenue count each logged sale, plus pre-ledger closer entries.</p>
       </Card>
 
       <div className="grid lg:grid-cols-2 gap-4">
         <Card className="p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-extrabold uppercase tracking-tight text-white">Funnel · week of {weekStart}</h3>
-            {isRegional && (
-              <Select value={funnelMarket} onChange={(e) => setFunnelMarket(e.target.value)}>
+            <Select value={funnelMarket} onChange={(e) => setFunnelMarket(e.target.value)}>
                 <option value="">All Markets</option>
                 {markets.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
               </Select>
-            )}
           </div>
           <Funnel totals={funnelTotals} />
         </Card>

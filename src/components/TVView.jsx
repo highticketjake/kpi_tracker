@@ -78,6 +78,10 @@ export default function TVView({ ctx, onExit }) {
         sets: stats.sets_set + (rep.role === "closer" ? stats.self_gen_sets : 0),
         ran: stats.appts_ran,
         closes: stats.totalCloses,
+        // generated = business this rep CREATED: knocker-set closes for knockers,
+        // self-gens for closers. Keeps closers from burying knockers on the board.
+        gen: stats.genCloses,
+        genRev: stats.genRevenue,
       };
     });
     const totals = marketTotals(scope, inRange, inRangeSales);
@@ -130,10 +134,10 @@ export default function TVView({ ctx, onExit }) {
   }, []);
 
   const knockers = data.rows.filter((r) => r.rep.role === "knocker").sort((a, b) => b.sets - a.sets || b.closes - a.closes);
-  const overall = [...data.rows].sort((a, b) => b.closes - a.closes || b.sets - a.sets || b.stats.revenue - a.stats.revenue);
-  const bySets = [...data.rows].sort((a, b) => b.sets - a.sets).filter((r) => r.sets > 0 || true).slice(0, 6);
+  const overall = [...data.rows].sort((a, b) => b.gen - a.gen || b.genRev - a.genRev || b.sets - a.sets);
+  const closers = data.rows.filter((r) => r.rep.role === "closer").sort((a, b) => b.closes - a.closes || b.stats.revenue - a.stats.revenue).slice(0, 6);
   const byRan = [...data.rows].sort((a, b) => b.ran - a.ran).slice(0, 6);
-  const mvp = overall[0] && overall[0].closes > 0 ? overall[0] : null;
+  const mvp = overall[0] && overall[0].gen > 0 ? overall[0] : null;
   const title = marketId ? markets.find((m) => m.id === marketId)?.name : "All Markets";
 
   if (!region)
@@ -179,7 +183,7 @@ export default function TVView({ ctx, onExit }) {
           <RowList rows={knockers.slice(0, 8)} value={(r) => r.sets} unit="sets" />
         </Panel>
 
-        <Panel className="col-span-4" title="Overall" subtitle="by closes" big highlight>
+        <Panel className="col-span-4" title="Overall" subtitle="closes generated — knocker sets & closer self-gens" big highlight>
           {mvp && (
             <div className="flex items-center gap-2 mb-2 animate-pw-pop">
               <span className="text-pw-yellow font-extrabold text-xl">★ MVP {mvp.rep.name}</span>
@@ -188,13 +192,14 @@ export default function TVView({ ctx, onExit }) {
               ))}
             </div>
           )}
-          <RowList big rows={overall.slice(0, 8)} value={(r) => r.closes} unit="closes"
-            sub={(r) => `${r.sets} sets · ${fmtMoney(r.stats.revenue)}`} />
+          <RowList big rows={overall.slice(0, 8)} value={(r) => r.gen} unit="gen"
+            sub={(r) => `${r.sets} sets · ${fmtMoney(r.genRev)}`} />
         </Panel>
 
         <div className="col-span-3 flex flex-col gap-4 min-h-0">
-          <Panel title="Total sets" subtitle="everyone" className="flex-1">
-            <RowList compact rows={bySets} value={(r) => r.sets} unit="" />
+          <Panel title="Closers" subtitle="by closes closed" className="flex-1">
+            <RowList compact rows={closers} value={(r) => r.closes} unit=""
+              sub={(r) => fmtMoney(r.stats.revenue)} />
           </Panel>
           <Panel title="Total ran" subtitle="appointments" className="flex-1">
             <RowList compact rows={byRan} value={(r) => r.ran} unit="" />

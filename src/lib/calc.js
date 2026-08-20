@@ -86,6 +86,14 @@ export function repStats(rep, entries, sales = []) {
   const ledgerCloses = mySales.length;                                  // incl cancelled (still a yes)
   const ledgerRevenue = mySales.reduce((a, s) => a + (s.cancelled_at ? 0 : Number(s.amount) || 0), 0);
   const ledgerSelfGen = mySales.reduce((a, s) => a + (s.attribution === "self_gen" ? 1 : 0), 0);
+  // "Generated" business = deals this rep CREATED, not just closed: a knocker's
+  // attributed sales, a closer's self-gens. Used by the TV Overall board so
+  // closers (who close everything by definition) don't bury the knockers.
+  // Revenue is ledger-only — legacy rows can't split self-gen from knocker-set.
+  const ledgerGenRevenue = mySales.reduce(
+    (a, s) => a + (!s.cancelled_at && (isKnocker || s.attribution === "self_gen") ? Number(s.amount) || 0 : 0),
+    0
+  );
   // each close is a ran appointment (= an hour) for the closer
   if (!isKnocker) hours += ledgerCloses;
 
@@ -115,11 +123,13 @@ export function repStats(rep, entries, sales = []) {
     self_gen_closes: t.self_gen_closes + (isKnocker ? 0 : ledgerSelfGen),
     closes: isKnocker ? totalCloses : t.closes,      // knocker attribution credit, combined
     totalCloses,
+    genCloses: isKnocker ? totalCloses : t.self_gen_closes + ledgerSelfGen,
+    genRevenue: ledgerGenRevenue,
     setsAvg: days ? t.sets_set / days : 0,
     hoursAvg: days ? hours / days : 0,
     d2c: pct(t.convos_had, t.doors_knocked),
     c2s: pct(t.sets_set, t.convos_had),
-    closeRate: pct(totalCloses, ran),
+    closeRate: pct(totalCloses + t.credit_fails, ran), // credit fails count as a yes (Jake, 2026-08)
     cadRate: pct(t.cads, ran + t.cads),
     knockHours: t.convos_had / 10,
   };

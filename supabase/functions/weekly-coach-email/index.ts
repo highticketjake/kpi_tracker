@@ -31,16 +31,18 @@ function listDates(start: string, end: string): string[] {
 /* ---------- KPI math (ported from src/lib/calc.js) ---------- */
 type Entry = Record<string, number | string | null> & { entry_date: string; rep_id: string };
 type Rep = { id: string; name: string; role: string; market_id: string; recruits: number };
+type Sale = { closer_id: string; knocker_id: string | null; attribution: string; sale_date: string; amount: number | string | null; cancelled_at: string | null };
 
 const pct = (n: number, d: number) => (d > 0 ? (n / d) * 100 : 0);
 const num = (v: unknown) => Number(v) || 0;
 const closerHours = (e: Entry) => num(e.appts_ran) + num(e.cads) * 0.5 + num(e.convos_had) / 10;
 const repHours = (rep: Rep, e: Entry) => (rep.role === "knocker" ? num(e.convos_had) / 10 : closerHours(e));
 
-function stats(rep: Rep, entries: Entry[]) {
+function stats(rep: Rep, entries: Entry[], sales: Sale[] = []) {
   const f = ["doors_knocked", "convos_had", "sets_set", "appts_ran", "appts_closed", "cads", "closes", "revenue", "self_gen_sets", "self_gen_closes", "credit_fails", "cancels"];
   const t: Record<string, number> = Object.fromEntries(f.map((k) => [k, 0]));
-  let hours = 0, days = 0, bestSets = 0, bestDoors = 0, bestCloses = 0, fullDays = 0;
+  let hours = 0, days = 0, bestSets = 0, bestDoors = 0, fullDays = 0;
+  const dayCloses: Record<string, number> = {};
   for (const e of entries) {
     days++;
     const h = repHours(rep, e);
@@ -48,15 +50,34 @@ function stats(rep: Rep, entries: Entry[]) {
     if (h >= 5) fullDays++;
     bestSets = Math.max(bestSets, num(e.sets_set));
     bestDoors = Math.max(bestDoors, num(e.doors_knocked));
-    bestCloses = Math.max(bestCloses, num(e.appts_closed) + num(e.self_gen_closes) + (rep.role === "knocker" ? num(e.closes) : 0));
+    const legacyDay = num(e.appts_closed) + num(e.self_gen_closes) + (rep.role === "knocker" ? num(e.closes) : 0);
+    if (legacyDay) dayCloses[e.entry_date] = (dayCloses[e.entry_date] || 0) + legacyDay;
     for (const k of f) t[k] += num(e[k]);
   }
+  // v2.4 sales ledger: closes + revenue live here, not in daily counts (the
+  // email was blind to it from 2026-06-24 until this fix). A cancelled sale
+  // still counts as a close — only its revenue drops. Mirrors calc.js repStats.
+  const isK = rep.role === "knocker";
+  const mySales = sales.filter((x) => (isK ? x.knocker_id : x.closer_id) === rep.id);
+  const ledgerCloses = mySales.length;
+  const ledgerRevenue = mySales.reduce((a, x) => a + (x.cancelled_at ? 0 : num(x.amount)), 0);
+  const ledgerSelfGen = mySales.filter((x) => x.attribution === "self_gen").length;
+  if (!isK) hours += ledgerCloses; // each close is a ran appointment (= an hour)
+  for (const x of mySales) dayCloses[x.sale_date] = (dayCloses[x.sale_date] || 0) + 1;
+  const bestCloses = Math.max(0, ...Object.values(dayCloses));
+  const legacyCloses = isK ? t.closes : t.appts_closed + t.self_gen_closes;
+  const totalCloses = legacyCloses + ledgerCloses;
+  const ran = t.appts_ran + ledgerCloses;
   return {
     ...t, days, hours, fullDays, bestSets, bestDoors, bestCloses,
-    totalCloses: rep.role === "knocker" ? t.closes : t.appts_closed + t.self_gen_closes,
+    appts_ran: ran,
+    closes: isK ? totalCloses : t.closes,
+    self_gen_closes: t.self_gen_closes + (isK ? 0 : ledgerSelfGen),
+    revenue: t.revenue + (isK ? 0 : ledgerRevenue),
+    totalCloses,
     setsAvg: days ? t.sets_set / days : 0,
     hoursAvg: days ? hours / days : 0,
-    closeRate: pct(t.appts_closed, t.appts_ran),
+    closeRate: pct(totalCloses + t.credit_fails, ran), // credit fails count as a yes (Jake, 2026-08)
   };
 }
 
@@ -68,11 +89,12 @@ function quality(s: ReturnType<typeof stats>): number | null {
 }
 
 type Flag = { level: string; kind: "effort" | "skill"; text: string };
-function flagsFor(rep: Rep, byDate: Record<string, Entry>, end: string): Flag[] {
+function flagsFor(rep: Rep, byDate: Record<string, Entry>, end: string, repSales: Sale[] = []): Flag[] {
   const out: Flag[] = [];
   const week = listDates(addDays(end, -6), end).map((d) => byDate[d]).filter(Boolean) as Entry[];
-  if (week.length === 0) return [{ level: "action", kind: "effort", text: "No data logged this week" }];
-  const wk = stats(rep, week);
+  const weekSales = repSales.filter((x) => x.sale_date >= addDays(end, -6) && x.sale_date <= end);
+  if (week.length === 0 && weekSales.length === 0) return [{ level: "action", kind: "effort", text: "No data logged this week" }];
+  const wk = stats(rep, week, weekSales);
   if (rep.role === "knocker") {
     const talking = wk.convos_had / Math.max(wk.days, 1) >= 40;
     if (wk.setsAvg < 3) out.push({ level: "action", kind: talking ? "skill" : "effort", text: `Sets avg ${wk.setsAvg.toFixed(1)}/day (<3)` });
@@ -89,7 +111,8 @@ function flagsFor(rep: Rep, byDate: Record<string, Entry>, end: string): Flag[] 
     if (wk.appts_ran >= 5 && wk.closeRate < 30) out.push({ level: "coaching", kind: "skill", text: `Close rate ${wk.closeRate.toFixed(0)}% on ${wk.appts_ran} appts (<30%)` });
     const mtdStart = end.slice(0, 8) + "01";
     const mtd = listDates(mtdStart, end).map((d) => byDate[d]).filter(Boolean) as Entry[];
-    const sg = mtd.reduce((s, e) => s + num(e.self_gen_closes), 0);
+    const sg = mtd.reduce((s, e) => s + num(e.self_gen_closes), 0)
+      + repSales.filter((x) => x.attribution === "self_gen" && x.sale_date >= mtdStart && x.sale_date <= end).length;
     const dom = Number(end.slice(8, 10));
     if (sg === 0 && dom > 20) out.push({ level: "action", kind: "effort", text: "0 self-gen closes this month (past day 20)" });
     else if (sg === 0 && dom > 14) out.push({ level: "coaching", kind: "effort", text: "0 self-gen closes this month (past day 14)" });
@@ -97,8 +120,8 @@ function flagsFor(rep: Rep, byDate: Record<string, Entry>, end: string): Flag[] 
   return out;
 }
 
-function weekScore(rep: Rep, entries: Entry[]) {
-  const s = stats(rep, entries);
+function weekScore(rep: Rep, entries: Entry[], sales: Sale[] = []) {
+  const s = stats(rep, entries, sales);
   return rep.role === "knocker" ? s.sets_set * 3 + s.closes * 8 + s.doors_knocked / 40 : s.totalCloses * 8 + s.hours;
 }
 
@@ -186,20 +209,26 @@ Deno.serve(async (req: Request) => {
   const weekStart = addDays(end, -6);
   const windowStart = addDays(end, -34); // covers trend week + self-gen month-to-date
 
-  const [{ data: markets }, { data: reps }, { data: entries }, { data: escalations }, { data: profiles }] = await Promise.all([
+  const [{ data: markets }, { data: reps }, { data: entries }, { data: salesData }, { data: escalations }, { data: profiles }] = await Promise.all([
     admin.from("markets").select("*").order("name"),
     admin.from("reps").select("*").eq("active", true).eq("terminated", false),
     admin.from("kpi_entries").select("*").gte("entry_date", windowStart),
+    admin.from("sales").select("*").gte("sale_date", windowStart),
     admin.from("escalations").select("rep_id, severity"),
     admin.from("profiles").select("*").eq("active", true),
   ]);
-  if (!markets || !reps || !entries || !profiles) return json({ error: "data load failed" }, 500);
+  if (!markets || !reps || !entries || !salesData || !profiles) return json({ error: "data load failed" }, 500);
 
   const byRepDate: Record<string, Record<string, Entry>> = {};
   for (const e of entries as Entry[]) (byRepDate[e.rep_id] ??= {})[e.entry_date] = e;
   const escByRep: Record<string, string[]> = {};
   for (const e of (escalations ?? []) as { rep_id: string; severity: string }[]) (escByRep[e.rep_id] ??= []).push(e.severity);
   const closerIds = new Set((reps as Rep[]).filter((r) => r.role === "closer").map((r) => r.id));
+  const salesByRep: Record<string, Sale[]> = {};
+  for (const x of salesData as Sale[]) {
+    (salesByRep[x.closer_id] ??= []).push(x);
+    if (x.knocker_id) (salesByRep[x.knocker_id] ??= []).push(x);
+  }
 
   // Build per-market sections.
   const sections: Record<string, { html: string; oneOnOnes: number; shadows: number; winCount: number }> = {};
@@ -211,20 +240,23 @@ Deno.serve(async (req: Request) => {
     for (const rep of mReps) {
       const byDate = byRepDate[rep.id] || {};
       const weekEntries = listDates(weekStart, end).map((d) => byDate[d]).filter(Boolean) as Entry[];
-      const s = stats(rep, weekEntries);
+      const repSales = salesByRep[rep.id] || [];
+      const weekSales = repSales.filter((x) => x.sale_date >= weekStart && x.sale_date <= end);
+      const s = stats(rep, weekEntries, weekSales);
       totals.doors += s.doors_knocked;
       totals.sets += s.sets_set + (rep.role === "closer" ? s.self_gen_sets : 0);
       if (closerIds.has(rep.id)) { totals.closes += s.totalCloses; totals.revenue += s.revenue; }
 
-      const fl = flagsFor(rep, byDate, end);
+      const fl = flagsFor(rep, byDate, end, repSales);
       const hasEffort = fl.some((f) => f.kind === "effort"), hasSkill = fl.some((f) => f.kind === "skill");
       const rec = hasEffort && hasSkill ? "both" : hasEffort ? "1on1" : hasSkill ? "shadow" : null;
       if (rec) {
         if (rec !== "shadow") oneOnOnes++;
         if (rec !== "1on1") shadows++;
         const prevWeek = listDates(addDays(weekStart, -7), addDays(end, -7)).map((d) => byDate[d]).filter(Boolean) as Entry[];
-        const cur = weekScore(rep, weekEntries), prev = weekScore(rep, prevWeek);
-        const trend = prevWeek.length === 0 ? "flat" : cur > prev * 1.1 ? "up" : cur < prev * 0.9 ? "down" : "flat";
+        const prevSales = repSales.filter((x) => x.sale_date >= addDays(weekStart, -7) && x.sale_date <= addDays(end, -7));
+        const cur = weekScore(rep, weekEntries, weekSales), prev = weekScore(rep, prevWeek, prevSales);
+        const trend = prevWeek.length === 0 && prevSales.length === 0 ? "flat" : cur > prev * 1.1 ? "up" : cur < prev * 0.9 ? "down" : "flat";
         const worst = Math.max(-1, ...(escByRep[rep.id] ?? []).map((sv) => SEV.indexOf(sv)));
         const next = SEV[Math.min(worst + 1, SEV.length - 1)];
         const ladder = worst >= 0

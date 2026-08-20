@@ -23,7 +23,7 @@ export default function Promotion({ ctx }) {
     <div className="space-y-3">
       <SectionTitle
         right={
-          isRegional && (
+          (
             <Select value={marketId} onChange={(e) => setMarketId(e.target.value)}>
               <option value="">All Markets</option>
               {markets.map((m) => (
