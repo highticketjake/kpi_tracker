@@ -1,5 +1,5 @@
 {
-  "exported_at": "2026-10-05T13:53:59.519Z",
+  "exported_at": "2026-10-12T14:42:33.283Z",
   "tables": {
     "markets": [
       {
@@ -136,9 +136,9 @@
         "name": "Jacob Grace",
         "role": "knocker",
         "start_date": "2026-09-19",
-        "active": true,
-        "terminated": false,
-        "terminated_at": null,
+        "active": false,
+        "terminated": true,
+        "terminated_at": "2026-10-07",
         "recruits": 0,
         "created_at": "2026-09-19T17:06:39.475138+00:00"
       },
@@ -1594,6 +1594,28 @@
         "no_gos": 0
       },
       {
+        "id": "0058a0f7-9fa3-4d22-be79-a709e94a5aeb",
+        "rep_id": "c60edbcc-e95e-4bd1-b445-5c3374d3ee66",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-05",
+        "doors_knocked": 95,
+        "convos_had": 42,
+        "sets_set": 2,
+        "appts_ran": 1,
+        "appts_closed": 0,
+        "cads": 1,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-06T16:38:23.578821+00:00",
+        "credit_fails": 0,
+        "cancels": 0,
+        "no_gos": 1
+      },
+      {
         "id": "009c5a04-4724-4c0b-a842-bb0cc14f1ff2",
         "rep_id": "9a5b26af-7f9b-4e6e-9fea-c5ce2b5c336d",
         "market_id": "c5a9bde9-311f-467b-a700-786c6eed4199",
@@ -1616,6 +1638,28 @@
         "no_gos": 0
       },
       {
+        "id": "00a74d2f-08da-4ed0-98c0-3c4d9bfa816b",
+        "rep_id": "05743aee-fbfc-4c4c-9b50-280c370aa2f9",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-09",
+        "doors_knocked": 67,
+        "convos_had": 25,
+        "sets_set": 0,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 1,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 1,
+        "self_gen_closes": 0,
+        "notes": "was in appt with me for another hour",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-10T16:17:00.258316+00:00",
+        "credit_fails": 0,
+        "cancels": 1,
+        "no_gos": 0
+      },
+      {
         "id": "00abe00b-1daa-4412-b3dd-a7044568908e",
         "rep_id": "ec95ec9f-7202-48fb-815f-c2c214c7c910",
         "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
@@ -1635,6 +1679,28 @@
         "updated_at": "2026-06-25T04:51:42.685873+00:00",
         "credit_fails": 0,
         "cancels": 0,
+        "no_gos": 0
+      },
+      {
+        "id": "00aef3ec-51b7-4aad-b1fe-f688915a6e46",
+        "rep_id": "b748bb13-d855-4c90-9fe7-81c3a3775f21",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-06",
+        "doors_knocked": 109,
+        "convos_had": 40,
+        "sets_set": 0,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 0,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 2,
+        "self_gen_closes": 0,
+        "notes": "went to an appt with me",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-07T17:16:42.633389+00:00",
+        "credit_fails": 0,
+        "cancels": 3,
         "no_gos": 0
       },
       {
@@ -1814,6 +1880,28 @@
         "no_gos": 0
       },
       {
+        "id": "022c4fc4-1f66-49ad-8e31-136c4867ecbf",
+        "rep_id": "058bc783-b70f-4223-9161-97222d937215",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-07",
+        "doors_knocked": 135,
+        "convos_had": 36,
+        "sets_set": 1,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 0,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-08T17:00:56.208024+00:00",
+        "credit_fails": 0,
+        "cancels": 1,
+        "no_gos": 0
+      },
+      {
         "id": "025cb325-ddab-4935-b4e3-b943d2c0d3a1",
         "rep_id": "d8e5e876-2c79-41c2-a940-7b8602ad98ce",
         "market_id": "8eb3630c-d594-4dcf-aaff-7eee61cc6a43",
@@ -1856,6 +1944,28 @@
         "credit_fails": 0,
         "cancels": 0,
         "no_gos": 0
+      },
+      {
+        "id": "02a199af-3ef5-4b54-8a4e-78134609f8e2",
+        "rep_id": "05743aee-fbfc-4c4c-9b50-280c370aa2f9",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-03",
+        "doors_knocked": 32,
+        "convos_had": 16,
+        "sets_set": 0,
+        "appts_ran": 2,
+        "appts_closed": 0,
+        "cads": 1,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 1,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-05T18:02:35.901593+00:00",
+        "credit_fails": 0,
+        "cancels": 2,
+        "no_gos": 2
       },
       {
         "id": "03761089-ad7c-4f14-b6ea-21bdd423f83a",
@@ -2846,6 +2956,28 @@
         "credit_fails": 0,
         "cancels": 1,
         "no_gos": 0
+      },
+      {
+        "id": "0af7ea17-a869-4d62-8b89-b9023246db06",
+        "rep_id": "058bc783-b70f-4223-9161-97222d937215",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-09",
+        "doors_knocked": 133,
+        "convos_had": 52,
+        "sets_set": 3,
+        "appts_ran": 1,
+        "appts_closed": 0,
+        "cads": 0,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-10T16:12:56.344518+00:00",
+        "credit_fails": 0,
+        "cancels": 1,
+        "no_gos": 1
       },
       {
         "id": "0b1eff8d-de8d-4427-b25a-acc677dab1c6",
@@ -4608,6 +4740,28 @@
         "no_gos": 0
       },
       {
+        "id": "176ad233-4870-472f-b910-98b5e48bd04d",
+        "rep_id": "058bc783-b70f-4223-9161-97222d937215",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-05",
+        "doors_knocked": 143,
+        "convos_had": 52,
+        "sets_set": 1,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 0,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-06T16:37:37.721029+00:00",
+        "credit_fails": 0,
+        "cancels": 0,
+        "no_gos": 0
+      },
+      {
         "id": "178e3c4d-8fb7-470c-85b3-52dd21a34fcd",
         "rep_id": "38aa7c31-86a7-4687-a984-d836b1fd178a",
         "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
@@ -5158,6 +5312,28 @@
         "no_gos": 1
       },
       {
+        "id": "1c139852-9166-4bf7-bd3d-a2ee2cbc06d5",
+        "rep_id": "0fdc011e-c543-4779-b5e3-18e8b2e1ed50",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-06",
+        "doors_knocked": 0,
+        "convos_had": 0,
+        "sets_set": 0,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 0,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-06T16:36:46.568734+00:00",
+        "credit_fails": 0,
+        "cancels": 0,
+        "no_gos": 0
+      },
+      {
         "id": "1c1fe218-c03a-40b7-9922-b84d38ad8044",
         "rep_id": "cd854eb5-9449-41a8-b2ed-9461052cafb7",
         "market_id": "e1521a2f-5501-4b3b-a2f8-9ba9cc2ea746",
@@ -5596,6 +5772,28 @@
         "credit_fails": 0,
         "cancels": 0,
         "no_gos": 1
+      },
+      {
+        "id": "1f89cc68-de44-4ea7-8e41-56d1641ab7d2",
+        "rep_id": "0fdc011e-c543-4779-b5e3-18e8b2e1ed50",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-05",
+        "doors_knocked": 111,
+        "convos_had": 45,
+        "sets_set": 1,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 1,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-06T16:36:58.261826+00:00",
+        "credit_fails": 0,
+        "cancels": 0,
+        "no_gos": 0
       },
       {
         "id": "1f9252c1-c5b3-46b8-b297-e24be48c63dc",
@@ -6500,6 +6698,28 @@
         "no_gos": 1
       },
       {
+        "id": "26358791-f0ca-48cf-9d71-9f6651172388",
+        "rep_id": "b748bb13-d855-4c90-9fe7-81c3a3775f21",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-05",
+        "doors_knocked": 95,
+        "convos_had": 38,
+        "sets_set": 0,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 0,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 1,
+        "self_gen_closes": 0,
+        "notes": "was in appt with me which would add 1 hr to his total",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-06T16:39:58.659415+00:00",
+        "credit_fails": 0,
+        "cancels": 2,
+        "no_gos": 0
+      },
+      {
         "id": "264084b5-881c-49a8-ac8f-03d5a7b25a8a",
         "rep_id": "f92df1b8-8bd4-467b-8007-f88aeb15afb3",
         "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
@@ -6695,6 +6915,28 @@
         "updated_at": "2026-09-22T18:47:11.932531+00:00",
         "credit_fails": 0,
         "cancels": 3,
+        "no_gos": 0
+      },
+      {
+        "id": "27d1e906-b92b-4700-85ed-3856a7e3fd18",
+        "rep_id": "b748bb13-d855-4c90-9fe7-81c3a3775f21",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-03",
+        "doors_knocked": 92,
+        "convos_had": 40,
+        "sets_set": 0,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 2,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 1,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-05T18:01:47.482494+00:00",
+        "credit_fails": 0,
+        "cancels": 2,
         "no_gos": 0
       },
       {
@@ -8194,6 +8436,28 @@
         "no_gos": 0
       },
       {
+        "id": "34782eb6-71d9-444a-862e-70b96533dd87",
+        "rep_id": "4be62795-75a4-4e2a-82de-43fae7587987",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-05",
+        "doors_knocked": 141,
+        "convos_had": 53,
+        "sets_set": 0,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 0,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-06T16:37:59.870405+00:00",
+        "credit_fails": 0,
+        "cancels": 1,
+        "no_gos": 0
+      },
+      {
         "id": "34c69759-e052-4438-b118-5701bf125455",
         "rep_id": "9cccbf55-8dab-4661-b047-70a77318e81f",
         "market_id": "c5a9bde9-311f-467b-a700-786c6eed4199",
@@ -8892,7 +9156,7 @@
         "self_gen_closes": 0,
         "notes": "",
         "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
-        "updated_at": "2026-09-25T17:06:04.322498+00:00",
+        "updated_at": "2026-10-05T16:59:46.486525+00:00",
         "credit_fails": 0,
         "cancels": 3,
         "no_gos": 0
@@ -9222,7 +9486,7 @@
         "self_gen_closes": 0,
         "notes": "",
         "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
-        "updated_at": "2026-09-29T17:27:55.508376+00:00",
+        "updated_at": "2026-10-05T16:59:14.924492+00:00",
         "credit_fails": 0,
         "cancels": 2,
         "no_gos": 2
@@ -9844,6 +10108,28 @@
         "no_gos": 0
       },
       {
+        "id": "3fc69e81-752c-47ea-bac0-9c60ff7bbddf",
+        "rep_id": "f92df1b8-8bd4-467b-8007-f88aeb15afb3",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-06",
+        "doors_knocked": 0,
+        "convos_had": 0,
+        "sets_set": 0,
+        "appts_ran": 1,
+        "appts_closed": 0,
+        "cads": 0,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-07T17:16:02.908258+00:00",
+        "credit_fails": 1,
+        "cancels": 2,
+        "no_gos": 0
+      },
+      {
         "id": "400e893d-12d7-4b46-9532-ade3ed2ec35a",
         "rep_id": "897ea9f2-0b39-4304-8e54-285b5ebd6684",
         "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
@@ -10018,6 +10304,28 @@
         "credit_fails": 0,
         "cancels": 0,
         "no_gos": 1
+      },
+      {
+        "id": "41002fd5-6259-43bb-9d46-49299dd87f35",
+        "rep_id": "b748bb13-d855-4c90-9fe7-81c3a3775f21",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-07",
+        "doors_knocked": 104,
+        "convos_had": 34,
+        "sets_set": 0,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 0,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 2,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-08T17:02:06.102731+00:00",
+        "credit_fails": 0,
+        "cancels": 0,
+        "no_gos": 0
       },
       {
         "id": "41965ebf-950c-4cd7-b5a7-68ce369f45b1",
@@ -12286,6 +12594,28 @@
         "no_gos": 0
       },
       {
+        "id": "50b9b181-ad5a-4a8e-8bab-9dc02dbfb325",
+        "rep_id": "058bc783-b70f-4223-9161-97222d937215",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-08",
+        "doors_knocked": 165,
+        "convos_had": 48,
+        "sets_set": 0,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 0,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-09T18:45:07.599333+00:00",
+        "credit_fails": 0,
+        "cancels": 0,
+        "no_gos": 0
+      },
+      {
         "id": "50e151df-744c-4723-a797-ccff07265892",
         "rep_id": "4be62795-75a4-4e2a-82de-43fae7587987",
         "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
@@ -12391,6 +12721,28 @@
         "notes": "",
         "created_by": null,
         "updated_at": "2026-08-06T15:52:44.633826+00:00",
+        "credit_fails": 0,
+        "cancels": 0,
+        "no_gos": 0
+      },
+      {
+        "id": "521a3483-bd9e-4d84-a230-7afcf6f47b9d",
+        "rep_id": "4be62795-75a4-4e2a-82de-43fae7587987",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-03",
+        "doors_knocked": 153,
+        "convos_had": 48,
+        "sets_set": 1,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 1,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-05T18:00:28.596102+00:00",
         "credit_fails": 0,
         "cancels": 0,
         "no_gos": 0
@@ -12730,8 +13082,8 @@
         "rep_id": "0fdc011e-c543-4779-b5e3-18e8b2e1ed50",
         "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
         "entry_date": "2026-10-03",
-        "doors_knocked": 0,
-        "convos_had": 0,
+        "doors_knocked": 78,
+        "convos_had": 38,
         "sets_set": 0,
         "appts_ran": 0,
         "appts_closed": 0,
@@ -12742,7 +13094,7 @@
         "self_gen_closes": 0,
         "notes": "",
         "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
-        "updated_at": "2026-10-03T16:05:58.655088+00:00",
+        "updated_at": "2026-10-05T17:58:15.638732+00:00",
         "credit_fails": 0,
         "cancels": 0,
         "no_gos": 0
@@ -13054,6 +13406,28 @@
         "credit_fails": 0,
         "cancels": 1,
         "no_gos": 0
+      },
+      {
+        "id": "56486a1b-da3d-45f2-b521-68adc956533b",
+        "rep_id": "05743aee-fbfc-4c4c-9b50-280c370aa2f9",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-06",
+        "doors_knocked": 100,
+        "convos_had": 45,
+        "sets_set": 0,
+        "appts_ran": 1,
+        "appts_closed": 0,
+        "cads": 0,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 3,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-07T17:17:11.423944+00:00",
+        "credit_fails": 0,
+        "cancels": 0,
+        "no_gos": 1
       },
       {
         "id": "564b1359-c73f-47a7-bf6a-d3c55f9ec628",
@@ -14266,6 +14640,28 @@
         "no_gos": 0
       },
       {
+        "id": "5fc7921e-230d-4c5e-801a-dabf71a5d443",
+        "rep_id": "897ea9f2-0b39-4304-8e54-285b5ebd6684",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-06",
+        "doors_knocked": 0,
+        "convos_had": 0,
+        "sets_set": 0,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 0,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-07T17:14:48.54021+00:00",
+        "credit_fails": 0,
+        "cancels": 1,
+        "no_gos": 0
+      },
+      {
         "id": "5fe670ba-e56f-4921-bc6b-2a01e3e7789a",
         "rep_id": "84645d0c-6a44-4d12-b297-3c6fcf586f3b",
         "market_id": "8eb3630c-d594-4dcf-aaff-7eee61cc6a43",
@@ -15142,6 +15538,28 @@
         "created_by": null,
         "updated_at": "2026-07-10T16:17:17.953382+00:00",
         "credit_fails": 1,
+        "cancels": 0,
+        "no_gos": 0
+      },
+      {
+        "id": "667d8493-78cd-4d4e-8278-cd68c98df146",
+        "rep_id": "c60edbcc-e95e-4bd1-b445-5c3374d3ee66",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-08",
+        "doors_knocked": 124,
+        "convos_had": 22,
+        "sets_set": 1,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 0,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-09T18:46:00.620586+00:00",
+        "credit_fails": 0,
         "cancels": 0,
         "no_gos": 0
       },
@@ -16950,6 +17368,28 @@
         "no_gos": 0
       },
       {
+        "id": "7390a1f5-61d7-402d-b10f-30de1d1e8e99",
+        "rep_id": "058bc783-b70f-4223-9161-97222d937215",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-03",
+        "doors_knocked": 104,
+        "convos_had": 46,
+        "sets_set": 1,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 1,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-05T17:59:55.101045+00:00",
+        "credit_fails": 0,
+        "cancels": 0,
+        "no_gos": 0
+      },
+      {
         "id": "7399beb9-d301-456f-a0e7-fac6a31f0e1f",
         "rep_id": "897ea9f2-0b39-4304-8e54-285b5ebd6684",
         "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
@@ -18182,6 +18622,28 @@
         "no_gos": 1
       },
       {
+        "id": "7deb09c2-d492-45ef-8468-2ddd64a34064",
+        "rep_id": "897ea9f2-0b39-4304-8e54-285b5ebd6684",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-07",
+        "doors_knocked": 94,
+        "convos_had": 49,
+        "sets_set": 2,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 2,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-08T17:00:31.797652+00:00",
+        "credit_fails": 0,
+        "cancels": 0,
+        "no_gos": 0
+      },
+      {
         "id": "7e1571a0-01ed-404f-b5f6-8bebf87a9a3f",
         "rep_id": "84645d0c-6a44-4d12-b297-3c6fcf586f3b",
         "market_id": "8eb3630c-d594-4dcf-aaff-7eee61cc6a43",
@@ -18221,6 +18683,28 @@
         "notes": "",
         "created_by": null,
         "updated_at": "2026-06-25T04:51:42.685873+00:00",
+        "credit_fails": 0,
+        "cancels": 0,
+        "no_gos": 0
+      },
+      {
+        "id": "7e79ecf5-259d-4108-ad61-adc1afa6fb85",
+        "rep_id": "058bc783-b70f-4223-9161-97222d937215",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-06",
+        "doors_knocked": 136,
+        "convos_had": 48,
+        "sets_set": 0,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 0,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-07T17:15:05.58964+00:00",
         "credit_fails": 0,
         "cancels": 0,
         "no_gos": 0
@@ -18620,6 +19104,28 @@
         "credit_fails": 1,
         "cancels": 0,
         "no_gos": 1
+      },
+      {
+        "id": "814d6935-e91f-4537-b92c-f844d41f28b3",
+        "rep_id": "b748bb13-d855-4c90-9fe7-81c3a3775f21",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-08",
+        "doors_knocked": 99,
+        "convos_had": 44,
+        "sets_set": 0,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 1,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 2,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-09T18:46:44.713228+00:00",
+        "credit_fails": 0,
+        "cancels": 3,
+        "no_gos": 0
       },
       {
         "id": "81810da5-937b-4989-95df-54761a6e22a5",
@@ -19194,6 +19700,28 @@
         "no_gos": 1
       },
       {
+        "id": "84b74568-109f-48d2-89ca-2845a239ff73",
+        "rep_id": "f92df1b8-8bd4-467b-8007-f88aeb15afb3",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-08",
+        "doors_knocked": 0,
+        "convos_had": 0,
+        "sets_set": 0,
+        "appts_ran": 1,
+        "appts_closed": 0,
+        "cads": 1,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-09T18:46:15.061426+00:00",
+        "credit_fails": 0,
+        "cancels": 0,
+        "no_gos": 1
+      },
+      {
         "id": "84e3f3fd-07de-4969-918d-fc1ff9b89502",
         "rep_id": "784a22a0-1433-433d-bf65-4c3c25f42860",
         "market_id": "c5a9bde9-311f-467b-a700-786c6eed4199",
@@ -19277,6 +19805,28 @@
         "notes": "",
         "created_by": null,
         "updated_at": "2026-07-19T23:20:11.353057+00:00",
+        "credit_fails": 0,
+        "cancels": 1,
+        "no_gos": 0
+      },
+      {
+        "id": "85f7a04d-8bbf-47dd-b3ee-1ab6f536c074",
+        "rep_id": "f92df1b8-8bd4-467b-8007-f88aeb15afb3",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-07",
+        "doors_knocked": 0,
+        "convos_had": 0,
+        "sets_set": 0,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 2,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-08T17:01:25.554498+00:00",
         "credit_fails": 0,
         "cancels": 1,
         "no_gos": 0
@@ -19522,6 +20072,28 @@
         "credit_fails": 0,
         "cancels": 2,
         "no_gos": 1
+      },
+      {
+        "id": "87c8f8ae-20fc-4812-ac6d-ef3ddfe7763d",
+        "rep_id": "c60edbcc-e95e-4bd1-b445-5c3374d3ee66",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-07",
+        "doors_knocked": 126,
+        "convos_had": 51,
+        "sets_set": 0,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 0,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-08T17:01:18.377274+00:00",
+        "credit_fails": 0,
+        "cancels": 0,
+        "no_gos": 0
       },
       {
         "id": "87febcc0-c6d5-4aef-a837-2d360d541296",
@@ -20998,6 +21570,28 @@
         "no_gos": 0
       },
       {
+        "id": "93ecb938-0e82-4874-b092-d8c84d37253d",
+        "rep_id": "897ea9f2-0b39-4304-8e54-285b5ebd6684",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-05",
+        "doors_knocked": 132,
+        "convos_had": 62,
+        "sets_set": 1,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 0,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-06T16:37:17.815194+00:00",
+        "credit_fails": 0,
+        "cancels": 0,
+        "no_gos": 0
+      },
+      {
         "id": "94123581-f802-4091-9386-2d237a5c1e4a",
         "rep_id": "004ef462-e034-4dfa-8906-a0564346ce32",
         "market_id": "8eb3630c-d594-4dcf-aaff-7eee61cc6a43",
@@ -21213,6 +21807,28 @@
         "notes": "",
         "created_by": null,
         "updated_at": "2026-08-19T15:57:18.726101+00:00",
+        "credit_fails": 0,
+        "cancels": 0,
+        "no_gos": 0
+      },
+      {
+        "id": "97f7380a-17a4-4050-84a8-499b48b362ec",
+        "rep_id": "c60edbcc-e95e-4bd1-b445-5c3374d3ee66",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-06",
+        "doors_knocked": 0,
+        "convos_had": 0,
+        "sets_set": 0,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 0,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-07T17:15:42.474397+00:00",
         "credit_fails": 0,
         "cancels": 0,
         "no_gos": 0
@@ -21589,6 +22205,28 @@
         "updated_at": "2026-07-13T02:07:06.80185+00:00",
         "credit_fails": 0,
         "cancels": 4,
+        "no_gos": 1
+      },
+      {
+        "id": "9a800400-5de8-4f1e-9d92-6b75957c130f",
+        "rep_id": "05743aee-fbfc-4c4c-9b50-280c370aa2f9",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-05",
+        "doors_knocked": 64,
+        "convos_had": 26,
+        "sets_set": 0,
+        "appts_ran": 1,
+        "appts_closed": 0,
+        "cads": 2,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 2,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-06T16:42:23.661789+00:00",
+        "credit_fails": 0,
+        "cancels": 2,
         "no_gos": 1
       },
       {
@@ -22668,6 +23306,28 @@
         "credit_fails": 0,
         "cancels": 1,
         "no_gos": 0
+      },
+      {
+        "id": "a28ad9a7-a041-4b0c-997a-e03b0a3a78ad",
+        "rep_id": "897ea9f2-0b39-4304-8e54-285b5ebd6684",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-03",
+        "doors_knocked": 106,
+        "convos_had": 47,
+        "sets_set": 1,
+        "appts_ran": 2,
+        "appts_closed": 0,
+        "cads": 0,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-05T17:59:17.263438+00:00",
+        "credit_fails": 0,
+        "cancels": 2,
+        "no_gos": 2
       },
       {
         "id": "a2c3d94d-1733-47dd-afb5-a9fb0dca7ea8",
@@ -23946,6 +24606,28 @@
         "no_gos": 2
       },
       {
+        "id": "b0d69bdf-f1be-40a1-a840-0d51801d25fb",
+        "rep_id": "897ea9f2-0b39-4304-8e54-285b5ebd6684",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-08",
+        "doors_knocked": 124,
+        "convos_had": 56,
+        "sets_set": 2,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 1,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-09T18:44:39.464476+00:00",
+        "credit_fails": 0,
+        "cancels": 0,
+        "no_gos": 0
+      },
+      {
         "id": "b0d6fdee-778b-4d2b-87d1-278c24318061",
         "rep_id": "4be62795-75a4-4e2a-82de-43fae7587987",
         "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
@@ -24298,6 +24980,28 @@
         "no_gos": 0
       },
       {
+        "id": "b2ea30a7-1ba4-496d-bb09-3aea6a567507",
+        "rep_id": "f92df1b8-8bd4-467b-8007-f88aeb15afb3",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-05",
+        "doors_knocked": 0,
+        "convos_had": 0,
+        "sets_set": 0,
+        "appts_ran": 1,
+        "appts_closed": 0,
+        "cads": 1,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-06T16:38:37.516535+00:00",
+        "credit_fails": 0,
+        "cancels": 0,
+        "no_gos": 1
+      },
+      {
         "id": "b2f98984-414b-42e2-9042-3dcc64413168",
         "rep_id": "d5196ede-cd26-4410-bfb7-b45d042b87c1",
         "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
@@ -24317,6 +25021,28 @@
         "updated_at": "2026-07-09T16:51:48.802528+00:00",
         "credit_fails": 0,
         "cancels": 4,
+        "no_gos": 0
+      },
+      {
+        "id": "b31de4b4-7e6d-4165-a689-f14ac8de0586",
+        "rep_id": "c60edbcc-e95e-4bd1-b445-5c3374d3ee66",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-09",
+        "doors_knocked": 136,
+        "convos_had": 47,
+        "sets_set": 2,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 0,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-10T16:15:47.744134+00:00",
+        "credit_fails": 0,
+        "cancels": 1,
         "no_gos": 0
       },
       {
@@ -28302,6 +29028,28 @@
         "no_gos": 0
       },
       {
+        "id": "d2cf337a-5898-49e1-9c2b-54bf153cd4f2",
+        "rep_id": "4be62795-75a4-4e2a-82de-43fae7587987",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-09",
+        "doors_knocked": 281,
+        "convos_had": 51,
+        "sets_set": 3,
+        "appts_ran": 1,
+        "appts_closed": 0,
+        "cads": 0,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-10T16:14:21.999698+00:00",
+        "credit_fails": 0,
+        "cancels": 0,
+        "no_gos": 1
+      },
+      {
         "id": "d2fa979d-0397-4c33-aad1-11e01f0431a6",
         "rep_id": "1c5c20d5-cec4-492a-81e7-345d2ab48317",
         "market_id": "e1521a2f-5501-4b3b-a2f8-9ba9cc2ea746",
@@ -28674,6 +29422,28 @@
         "credit_fails": 0,
         "cancels": 0,
         "no_gos": 1
+      },
+      {
+        "id": "d5a2a058-ad0b-41e7-86e6-b8c1c390e5c4",
+        "rep_id": "05743aee-fbfc-4c4c-9b50-280c370aa2f9",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-08",
+        "doors_knocked": 74,
+        "convos_had": 31,
+        "sets_set": 0,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 0,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 1,
+        "self_gen_closes": 0,
+        "notes": "went to an appt with me",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-09T18:49:24.918419+00:00",
+        "credit_fails": 0,
+        "cancels": 2,
+        "no_gos": 0
       },
       {
         "id": "d5eec7b1-7a1a-4309-87b9-c15bc18f4956",
@@ -30612,6 +31382,28 @@
         "no_gos": 0
       },
       {
+        "id": "e2c74732-ae42-47ab-b441-deb12bbcee6f",
+        "rep_id": "c60edbcc-e95e-4bd1-b445-5c3374d3ee66",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-03",
+        "doors_knocked": 96,
+        "convos_had": 53,
+        "sets_set": 0,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 1,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-05T18:01:01.912915+00:00",
+        "credit_fails": 0,
+        "cancels": 0,
+        "no_gos": 0
+      },
+      {
         "id": "e2cc4f68-6a7f-4f8d-979a-fb0f51c0174f",
         "rep_id": "cb7c3e77-f18b-4022-b989-79deb156c6a0",
         "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
@@ -30722,6 +31514,28 @@
         "no_gos": 1
       },
       {
+        "id": "e38e7784-4529-4a5e-be62-1f9f7ff1f7b2",
+        "rep_id": "f92df1b8-8bd4-467b-8007-f88aeb15afb3",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-03",
+        "doors_knocked": 0,
+        "convos_had": 0,
+        "sets_set": 0,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 0,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-05T18:01:14.50538+00:00",
+        "credit_fails": 0,
+        "cancels": 2,
+        "no_gos": 0
+      },
+      {
         "id": "e3b1cde2-4761-40c0-851f-7be68f857ab7",
         "rep_id": "d37910e2-6a53-43d1-acf2-c98c65975cf4",
         "market_id": "56787831-7657-49ff-ab97-a80c327efa9f",
@@ -30761,6 +31575,28 @@
         "notes": "",
         "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
         "updated_at": "2026-09-28T17:41:09.607365+00:00",
+        "credit_fails": 0,
+        "cancels": 0,
+        "no_gos": 0
+      },
+      {
+        "id": "e41c28bd-9186-433c-b979-e66e83c1e278",
+        "rep_id": "897ea9f2-0b39-4304-8e54-285b5ebd6684",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-09",
+        "doors_knocked": 197,
+        "convos_had": 83,
+        "sets_set": 3,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 1,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-10T16:12:32.976939+00:00",
         "credit_fails": 0,
         "cancels": 0,
         "no_gos": 0
@@ -33252,6 +34088,28 @@
         "no_gos": 0
       },
       {
+        "id": "f8cf1d14-e2df-466e-a0f1-802f07e8dafd",
+        "rep_id": "f92df1b8-8bd4-467b-8007-f88aeb15afb3",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-09",
+        "doors_knocked": 0,
+        "convos_had": 0,
+        "sets_set": 0,
+        "appts_ran": 2,
+        "appts_closed": 0,
+        "cads": 0,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-10T16:16:06.960493+00:00",
+        "credit_fails": 0,
+        "cancels": 0,
+        "no_gos": 2
+      },
+      {
         "id": "f8cfb74b-48d4-453d-aa21-b0d89d112fde",
         "rep_id": "2e5e468a-0ab3-406d-a301-aa700698126f",
         "market_id": "e1521a2f-5501-4b3b-a2f8-9ba9cc2ea746",
@@ -33956,6 +34814,50 @@
         "no_gos": 0
       },
       {
+        "id": "fea2c465-bf93-4086-8148-5582518bedf1",
+        "rep_id": "4be62795-75a4-4e2a-82de-43fae7587987",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-08",
+        "doors_knocked": 161,
+        "convos_had": 64,
+        "sets_set": 1,
+        "appts_ran": 0,
+        "appts_closed": 0,
+        "cads": 1,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-09T18:45:34.51192+00:00",
+        "credit_fails": 0,
+        "cancels": 1,
+        "no_gos": 0
+      },
+      {
+        "id": "ff4530f8-1c64-459a-8a30-874c3afaf416",
+        "rep_id": "4be62795-75a4-4e2a-82de-43fae7587987",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "entry_date": "2026-10-06",
+        "doors_knocked": 110,
+        "convos_had": 45,
+        "sets_set": 2,
+        "appts_ran": 1,
+        "appts_closed": 0,
+        "cads": 0,
+        "closes": 0,
+        "revenue": 0,
+        "self_gen_sets": 0,
+        "self_gen_closes": 0,
+        "notes": "",
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "updated_at": "2026-10-07T17:15:26.150662+00:00",
+        "credit_fails": 1,
+        "cancels": 1,
+        "no_gos": 0
+      },
+      {
         "id": "ff82ea2c-6f55-4aea-8b13-e6488dbd47cf",
         "rep_id": "d1460e3f-e88d-45b3-a5ef-c4491e88d437",
         "market_id": "56787831-7657-49ff-ab97-a80c327efa9f",
@@ -34264,6 +35166,19 @@
         "created_at": "2026-09-21T18:01:17.864148+00:00"
       },
       {
+        "id": "1142470d-0a6c-4043-9a14-2c2f2423fb5d",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "closer_id": "05743aee-fbfc-4c4c-9b50-280c370aa2f9",
+        "knocker_id": "897ea9f2-0b39-4304-8e54-285b5ebd6684",
+        "attribution": "knocker",
+        "sale_date": "2026-10-08",
+        "amount": 13000,
+        "cancelled_at": null,
+        "notes": null,
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "created_at": "2026-10-09T18:49:11.0625+00:00"
+      },
+      {
         "id": "12c85638-00a8-4e1e-a679-e4fd1f4d6cb6",
         "market_id": "c5a9bde9-311f-467b-a700-786c6eed4199",
         "closer_id": "d4d6f903-9a4a-4e01-92f3-deef6cc924e8",
@@ -34470,6 +35385,19 @@
         "notes": null,
         "created_by": "ca5ad57f-e42f-40fd-b3a5-677a063f4465",
         "created_at": "2026-08-06T15:56:51.509188+00:00"
+      },
+      {
+        "id": "2ccb041a-7bbf-49d6-9200-a3a6470149ff",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "closer_id": "05743aee-fbfc-4c4c-9b50-280c370aa2f9",
+        "knocker_id": "c60edbcc-e95e-4bd1-b445-5c3374d3ee66",
+        "attribution": "knocker",
+        "sale_date": "2026-10-03",
+        "amount": 15000,
+        "cancelled_at": null,
+        "notes": null,
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "created_at": "2026-10-05T18:02:33.667235+00:00"
       },
       {
         "id": "2d9a8713-c3fa-44b0-8967-821561726785",
@@ -34882,7 +35810,7 @@
         "attribution": "knocker",
         "sale_date": "2026-09-28",
         "amount": 16500,
-        "cancelled_at": null,
+        "cancelled_at": "2026-10-05T16:59:10.167+00:00",
         "notes": null,
         "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
         "created_at": "2026-09-29T17:27:48.446825+00:00"
@@ -35350,7 +36278,7 @@
         "attribution": "knocker",
         "sale_date": "2026-09-24",
         "amount": 38560,
-        "cancelled_at": null,
+        "cancelled_at": "2026-10-05T16:59:45.082+00:00",
         "notes": null,
         "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
         "created_at": "2026-09-25T17:06:00.612521+00:00"
@@ -35523,6 +36451,19 @@
         "notes": null,
         "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
         "created_at": "2026-09-06T17:04:09.430597+00:00"
+      },
+      {
+        "id": "dbb58f7a-df8d-400d-b3a6-2a0e0d87bf55",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "closer_id": "05743aee-fbfc-4c4c-9b50-280c370aa2f9",
+        "knocker_id": null,
+        "attribution": "self_gen",
+        "sale_date": "2026-10-09",
+        "amount": 12160,
+        "cancelled_at": null,
+        "notes": null,
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "created_at": "2026-10-10T16:16:39.108947+00:00"
       },
       {
         "id": "dda4cef1-5a13-42b7-b57e-0fcfd60a37c0",
@@ -35731,6 +36672,19 @@
         "notes": null,
         "created_by": "3288740c-0b48-4335-8d7d-4711999afc71",
         "created_at": "2026-07-13T02:01:10.487685+00:00"
+      },
+      {
+        "id": "fe0f557b-4f4c-4e75-81a0-a90256cffbfe",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f",
+        "closer_id": "b748bb13-d855-4c90-9fe7-81c3a3775f21",
+        "knocker_id": null,
+        "attribution": "self_gen",
+        "sale_date": "2026-10-07",
+        "amount": 24880,
+        "cancelled_at": null,
+        "notes": null,
+        "created_by": "eaf29abb-3143-407e-b2b0-d0129208e7ce",
+        "created_at": "2026-10-08T17:01:59.809044+00:00"
       }
     ],
     "escalations": [
@@ -50663,6 +51617,384 @@
         "ts": "2026-10-05T00:00:08.057834+00:00",
         "actor_email": "system",
         "message": "Coach email sent to 7 recipient(s) for week of 2026-09-28",
+        "market_id": null
+      },
+      {
+        "id": 2131,
+        "ts": "2026-10-05T16:59:10.571522+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "Sale cancelled for Anthony Troester",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2132,
+        "ts": "2026-10-05T16:59:15.045776+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Anthony Troester (2026-09-28)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2133,
+        "ts": "2026-10-05T16:59:45.423861+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "Sale cancelled for Ricardo Nunez",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2134,
+        "ts": "2026-10-05T16:59:46.612875+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Ricardo Nunez (2026-09-24)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2135,
+        "ts": "2026-10-05T17:58:15.97427+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Jacob Grace (2026-10-03)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2136,
+        "ts": "2026-10-05T17:59:17.457943+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Jared Chadburn (2026-10-03)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2137,
+        "ts": "2026-10-05T17:59:55.265277+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Larkin Sawyer (2026-10-03)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2138,
+        "ts": "2026-10-05T18:00:28.833132+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for MichaelKnight Fuson (2026-10-03)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2139,
+        "ts": "2026-10-05T18:01:02.094667+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Will Wright (2026-10-03)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2140,
+        "ts": "2026-10-05T18:01:14.658385+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Aaron Andrew (2026-10-03)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2141,
+        "ts": "2026-10-05T18:01:47.661842+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Anthony Troester (2026-10-03)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2142,
+        "ts": "2026-10-05T18:02:33.916145+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "Sale logged for Ricardo Nunez ($15,000)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2143,
+        "ts": "2026-10-05T18:02:36.489937+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Ricardo Nunez (2026-10-03)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2144,
+        "ts": "2026-10-06T16:36:38.553943+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Jacob Grace (2026-10-06)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2145,
+        "ts": "2026-10-06T16:36:46.734088+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Jacob Grace (2026-10-06)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2146,
+        "ts": "2026-10-06T16:36:58.392424+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Jacob Grace (2026-10-05)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2147,
+        "ts": "2026-10-06T16:37:18.164427+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Jared Chadburn (2026-10-05)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2148,
+        "ts": "2026-10-06T16:37:38.092349+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Larkin Sawyer (2026-10-05)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2149,
+        "ts": "2026-10-06T16:38:00.077229+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for MichaelKnight Fuson (2026-10-05)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2150,
+        "ts": "2026-10-06T16:38:23.790048+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Will Wright (2026-10-05)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2151,
+        "ts": "2026-10-06T16:38:37.716904+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Aaron Andrew (2026-10-05)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2152,
+        "ts": "2026-10-06T16:39:58.919395+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Anthony Troester (2026-10-05)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2153,
+        "ts": "2026-10-06T16:42:23.941345+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Ricardo Nunez (2026-10-05)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2154,
+        "ts": "2026-10-07T17:14:11.50279+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "Rep terminated: Jacob Grace",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2155,
+        "ts": "2026-10-07T17:14:48.996349+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Jared Chadburn (2026-10-06)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2156,
+        "ts": "2026-10-07T17:15:05.732255+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Larkin Sawyer (2026-10-06)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2157,
+        "ts": "2026-10-07T17:15:26.374396+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for MichaelKnight Fuson (2026-10-06)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2158,
+        "ts": "2026-10-07T17:15:42.645367+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Will Wright (2026-10-06)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2159,
+        "ts": "2026-10-07T17:16:03.044087+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Aaron Andrew (2026-10-06)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2160,
+        "ts": "2026-10-07T17:16:42.957451+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Anthony Troester (2026-10-06)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2161,
+        "ts": "2026-10-07T17:17:11.581478+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Ricardo Nunez (2026-10-06)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2162,
+        "ts": "2026-10-08T17:00:32.229152+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Jared Chadburn (2026-10-07)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2163,
+        "ts": "2026-10-08T17:00:56.377388+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Larkin Sawyer (2026-10-07)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2164,
+        "ts": "2026-10-08T17:01:18.529322+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Will Wright (2026-10-07)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2165,
+        "ts": "2026-10-08T17:01:25.819753+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Aaron Andrew (2026-10-07)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2166,
+        "ts": "2026-10-08T17:02:00.096744+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "Sale logged for Anthony Troester ($24,880)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2167,
+        "ts": "2026-10-08T17:02:06.258462+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Anthony Troester (2026-10-07)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2168,
+        "ts": "2026-10-09T18:44:39.852659+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Jared Chadburn (2026-10-08)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2169,
+        "ts": "2026-10-09T18:45:07.750224+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Larkin Sawyer (2026-10-08)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2170,
+        "ts": "2026-10-09T18:45:34.773997+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for MichaelKnight Fuson (2026-10-08)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2171,
+        "ts": "2026-10-09T18:46:00.798354+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Will Wright (2026-10-08)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2172,
+        "ts": "2026-10-09T18:46:15.199401+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Aaron Andrew (2026-10-08)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2173,
+        "ts": "2026-10-09T18:46:44.880269+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Anthony Troester (2026-10-08)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2174,
+        "ts": "2026-10-09T18:49:11.295145+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "Sale logged for Ricardo Nunez ($13,000)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2175,
+        "ts": "2026-10-09T18:49:14.76131+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Ricardo Nunez (2026-10-08)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2176,
+        "ts": "2026-10-09T18:49:25.485932+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Ricardo Nunez (2026-10-08)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2177,
+        "ts": "2026-10-10T16:12:33.416509+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Jared Chadburn (2026-10-09)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2178,
+        "ts": "2026-10-10T16:12:56.666704+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Larkin Sawyer (2026-10-09)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2179,
+        "ts": "2026-10-10T16:14:22.424569+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for MichaelKnight Fuson (2026-10-09)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2180,
+        "ts": "2026-10-10T16:15:47.958759+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Will Wright (2026-10-09)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2181,
+        "ts": "2026-10-10T16:16:07.112088+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Aaron Andrew (2026-10-09)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2182,
+        "ts": "2026-10-10T16:16:39.3443+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "Sale logged for Ricardo Nunez ($12,160)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2183,
+        "ts": "2026-10-10T16:17:00.419647+00:00",
+        "actor_email": "aaronandrewconsulting@gmail.com",
+        "message": "KPIs saved for Ricardo Nunez (2026-10-09)",
+        "market_id": "2ae2b967-22c5-4614-891e-69353f54363f"
+      },
+      {
+        "id": 2184,
+        "ts": "2026-10-12T00:00:06.822152+00:00",
+        "actor_email": "system",
+        "message": "Coach email sent to 7 recipient(s) for week of 2026-10-05",
         "market_id": null
       }
     ]
